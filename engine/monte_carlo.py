@@ -25,7 +25,7 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
     enriched = []
     
     try:
-        teams = client.stats.team_summary(start_season=season, end_season=season)
+        teams = client.stats.team_summary(start_season=season, end_season=season) or client.stats.team_summary(start_season="20252026", end_season="20252026")
         vgk_team = [t for t in teams if 'Vegas' in t.get('teamFullName', '') or t.get('teamId') == 54]
         team_goals = vgk_team[0]['goalsFor'] if vgk_team else 250
     except Exception:

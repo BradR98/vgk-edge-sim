@@ -68,9 +68,9 @@ def run_post_mortem():
     schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
     
     target_game_id = None
-    for day in schedule.get('gamesByDate', []):
-        if day.get('date') == yesterday:
-            target_game_id = day['games'][0]['id']
+    for game in schedule:
+        if game.get('gameDate') == yesterday:
+            target_game_id = game['id']
             break
             
     if not target_game_id:

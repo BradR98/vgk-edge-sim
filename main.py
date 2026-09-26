@@ -10,8 +10,7 @@ from engine.sheets import authenticate_gspread, get_workbook, update_game_day_ta
 
 def get_game_metadata(client, team_abbr="VGK"):
     try:
-        schedule = client.schedule.team_weekly_schedule(team_abbr=team_abbr)
-        games = schedule.get('games', [])
+        games = client.schedule.team_weekly_schedule(team_abbr=team_abbr)
         now = datetime.datetime.now(datetime.timezone.utc)
         
         upcoming = [g for g in games if datetime.datetime.fromisoformat(g['startTimeUTC'].replace('Z', '+00:00')) > now]
@@ -58,7 +57,7 @@ def main():
     
     print(f"Fetching Opponent stats for {opp_abbr}...")
     try:
-        teams = client.stats.team_summary(start_season="20262027", end_season="20262027")
+        teams = client.stats.team_summary(start_season="20262027", end_season="20262027") or client.stats.team_summary(start_season="20252026", end_season="20252026")
         opp_team_stats_lst = [t for t in teams if opp_abbr in t.get('teamFullName', '') or opp_abbr in t.get('teamAbbrevs', '')]
         if not opp_team_stats_lst:
              opp_team_stats_lst = [t for t in teams if opp_abbr in t.get('teamFullName', '')]
@@ -80,7 +79,7 @@ def main():
     }
     
     try:
-        goalies = client.stats.goalie_stats_summary(start_season="20262027", end_season="20262027", limit=200)
+        goalies = client.stats.goalie_stats_summary(start_season="20262027", end_season="20262027", limit=200) or client.stats.goalie_stats_summary(start_season="20252026", end_season="20252026", limit=200)
         opp_goalies = [g for g in goalies if g.get('teamAbbrevs') and opp_abbr in g['teamAbbrevs']]
         opp_sv_pct = opp_goalies[0].get('savePct', 0.900) if opp_goalies else 0.900
         opp_goalie_name = opp_goalies[0].get('lastName', 'Unknown') if opp_goalies else 'Unknown'

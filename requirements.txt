@@ -1,0 +1,7 @@
+nhl-api-py==3.3.0
+numpy
+pandas
+scipy
+beautifulsoup4
+requests
+python-dateutil

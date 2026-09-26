@@ -41,7 +41,7 @@ def parse_duration_to_minutes(duration_str):
         return int(parts[0]) + int(parts[1])/60.0
     return 0.0
 
-def build_fatigue_matrix(team_abbr="VGK", season="20252026", k_constant=0.5):
+def build_fatigue_matrix(team_abbr="VGK", season="20262027", k_constant=0.5):
     client = NHLClient()
     
     # 1. Active Roster
@@ -146,6 +146,6 @@ def build_fatigue_matrix(team_abbr="VGK", season="20252026", k_constant=0.5):
 
 if __name__ == "__main__":
     print("Building Fatigue Matrix for VGK...")
-    df = build_fatigue_matrix(season="20252026")
+    df = build_fatigue_matrix(season="20262027")
     print("\nVGK Fatigue Matrix:")
     print(df.head(10).to_string(index=False))

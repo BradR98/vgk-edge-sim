@@ -16,7 +16,7 @@ def get_workbook(gc):
         raise ValueError("SPREADSHEET_ID not found.")
     return gc.open_by_key(sheet_id)
 
-def update_game_day_tab(sh, df_goalie, df_skaters):
+def update_game_day_tab(sh, df_goalie, df_skaters, metadata):
     """Overwrites the Game_Day tab for the Canvas HUD with Goalie Block and Skater Grid."""
     ws_live = sh.worksheet("Game_Day")
     ws_live.clear()
@@ -33,10 +33,11 @@ def update_game_day_tab(sh, df_goalie, df_skaters):
     
     # Combine everything with padding
     full_data = [
+        [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}"],
+        [], # Row 2 empty separator
         goalie_header,
         goalie_data,
-        [], # Row 3 empty
-        [], # Row 4 empty
+        [], # Row 5 empty
         skater_header
     ] + skater_data
     

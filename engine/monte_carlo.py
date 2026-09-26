@@ -20,7 +20,7 @@ def parse_duration_to_minutes(duration_str):
         return int(parts[0]) + int(parts[1])/60.0
     return 0.0
 
-def enrich_fatigue_df(fatigue_df, season="20252026"):
+def enrich_fatigue_df(fatigue_df, season="20262027"):
     client = NHLClient()
     enriched = []
     

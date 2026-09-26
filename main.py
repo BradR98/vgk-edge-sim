@@ -54,11 +54,11 @@ def main():
     print(f"Opponent matched: {opp_abbr}")
     
     print("Building Fatigue Matrix...")
-    fatigue_df = build_fatigue_matrix(season="20232024")
+    fatigue_df = build_fatigue_matrix(season="20252026")
     
     print(f"Fetching Opponent stats for {opp_abbr}...")
     try:
-        teams = client.stats.team_summary(start_season="20232024", end_season="20232024")
+        teams = client.stats.team_summary(start_season="20252026", end_season="20252026")
         opp_team_stats_lst = [t for t in teams if opp_abbr in t.get('teamFullName', '') or opp_abbr in t.get('teamAbbrevs', '')]
         if not opp_team_stats_lst:
              opp_team_stats_lst = [t for t in teams if opp_abbr in t.get('teamFullName', '')]
@@ -80,7 +80,7 @@ def main():
     }
     
     try:
-        goalies = client.stats.goalie_stats_summary(start_season="20232024", end_season="20232024", limit=200)
+        goalies = client.stats.goalie_stats_summary(start_season="20252026", end_season="20252026", limit=200)
         opp_goalies = [g for g in goalies if g.get('teamAbbrevs') and opp_abbr in g['teamAbbrevs']]
         opp_sv_pct = opp_goalies[0].get('savePct', 0.900) if opp_goalies else 0.900
         opp_goalie_name = opp_goalies[0].get('lastName', 'Unknown') if opp_goalies else 'Unknown'
@@ -98,7 +98,7 @@ def main():
     opp_goalie_stats = {'name': opp_goalie_name, 'sv_pct': opp_sv_pct}
     
     print("Enriching DataFrame with player season stats and xG regression...")
-    fatigue_df = enrich_fatigue_df(fatigue_df, season="20232024")
+    fatigue_df = enrich_fatigue_df(fatigue_df, season="20252026")
     
     print("Running 10,000 Monte Carlo full handicap simulations...")
     df_skaters, df_goalie = run_full_handicap_simulation(

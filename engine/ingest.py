@@ -53,17 +53,18 @@ def build_fatigue_matrix(team_abbr="VGK", season="20262027", k_constant=0.5):
     games = sched.get('games', [])
     # For simulation purposes, assume the last 2 games in the schedule represent prev and curr
     # Realistically, we'd find the latest played game. Let's just grab the last 2 games from regular season
-    reg_games = [g for g in games if g.get('gameType') == 2]
+    reg_games = [g for g in games if g.get('gameType') in (1, 2)]
+    
     if len(reg_games) < 2:
-        print("Not enough games to calculate fatigue.")
-        return pd.DataFrame()
-    
-    prev_game = reg_games[-2]
-    curr_game = reg_games[-1]
-    
-    prev_home = prev_game['homeTeam']['abbrev']
-    curr_home = curr_game['homeTeam']['abbrev']
-    
+        print("Not enough games to calculate fatigue. Assuming baseline.")
+        prev_home = "Unknown"
+        curr_home = team_abbr
+    else:
+        prev_game = reg_games[-2]
+        curr_game = reg_games[-1]
+        prev_home = prev_game['homeTeam']['abbrev']
+        curr_home = curr_game['homeTeam']['abbrev']
+        
     travel_penalty = calculate_travel_penalty(prev_home, curr_home)
     
     matrix = []
@@ -130,9 +131,12 @@ def build_fatigue_matrix(team_abbr="VGK", season="20262027", k_constant=0.5):
         # Cap to prevent unreasonable projection drops
         fatigue_modifier = max(0.80, min(1.0, fatigue_modifier))
         
+        pos = skater.get('positionCode', 'F')
+        
         matrix.append({
             'Player_ID': player_id,
             'Name': name,
+            'Position': pos,
             'Season_Avg_Dist': round(season_avg_dist, 2),
             'Prev_Game_Dist': round(prev_game_dist, 2),
             'Prev_Game_Bursts': round(prev_game_bursts, 1),

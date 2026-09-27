@@ -37,6 +37,8 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
             stats = client.stats.player_career_stats(player_id=pid)
             season_totals = stats.get('seasonTotals', [])
             reg_stats = [s for s in season_totals if str(s.get('season')) == season and s.get('gameTypeId') == 2]
+            if not reg_stats:
+                reg_stats = [s for s in season_totals if str(s.get('season')) == "20252026" and s.get('gameTypeId') == 2]
             
             if reg_stats:
                 st = reg_stats[0]
@@ -52,7 +54,7 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
                 sog_per_60 = (shots / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
                 pim_per_60 = (pim / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
                 
-                pos = stats.get('position', 'F')
+                pos = row.get('Position', 'F')
                 league_avg_pos = 0.045 if pos == 'D' else 0.105
                 
                 # Use regressed shooting pct as proxy for xG per shot
@@ -66,14 +68,14 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
                 xg_per_shot = 0
                 assist_share = 0
                 avg_toi = 0.0
-                pos = 'F'
+                pos = row.get('Position', 'F')
         except Exception as e:
             sog_per_60 = 0
             pim_per_60 = 0
             xg_per_shot = 0
             assist_share = 0
             avg_toi = 0.0
-            pos = 'F'
+            pos = row.get('Position', 'F')
             
         new_row = row.to_dict()
         new_row['Avg_TOI'] = avg_toi

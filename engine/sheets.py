@@ -94,10 +94,14 @@ def append_team_ledger(sh, df_lines, metadata):
     """Appends to the historical Team_Ledger tab."""
     try:
         ws_ledger = sh.worksheet("Team_Ledger")
+        # Force recreation if old schema exists
+        if "Went_To_OT" not in ws_ledger.row_values(1):
+            sh.del_worksheet(ws_ledger)
+            raise Exception("Force recreate")
     except Exception:
         ws_ledger = sh.add_worksheet(title="Team_Ledger", rows="1000", cols="20")
         # Add headers to new sheet
-        headers = ["game_id", "game_date", "opponent", "venue", "sim_timestamp_utc"] + df_lines.columns.values.tolist()
+        headers = ["game_id", "game_date", "opponent", "venue", "sim_timestamp_utc"] + df_lines.columns.values.tolist() + ["Actual_VGK_Goals", "Actual_VGK_SOG", "Actual_Opp_Goals", "Actual_Opp_SOG", "Went_To_OT"]
         ws_ledger.update(range_name="A1", values=[headers])
         
     ledger_lines = df_lines.copy()
@@ -111,6 +115,9 @@ def append_team_ledger(sh, df_lines, metadata):
     
     ledger_lines = ledger_lines.fillna("")
     data = ledger_lines.values.tolist()
+    
+    # Append 5 empty strings for the Actuals columns
+    data[0].extend(["", "", "", "", ""])
     
     ws_ledger.append_rows(values=data, value_input_option="USER_ENTERED")
     print("Team_Ledger tab appended successfully.")

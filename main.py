@@ -79,14 +79,33 @@ def main():
     }
     
     try:
-        goalies = client.stats.goalie_stats_summary(start_season="20262027", end_season="20262027", limit=200) or client.stats.goalie_stats_summary(start_season="20252026", end_season="20252026", limit=200)
-        opp_goalies = [g for g in goalies if g.get('teamAbbrevs') and opp_abbr in g['teamAbbrevs']]
-        opp_sv_pct = opp_goalies[0].get('savePct', 0.900) if opp_goalies else 0.900
-        opp_goalie_name = opp_goalies[0].get('lastName', 'Unknown') if opp_goalies else 'Unknown'
+        # Get active rosters to filter out traded/AHL goalies
+        vgk_roster = client.teams.team_roster(team_abbr="VGK", season="20262027")
+        vgk_goalie_ids = [g['id'] for g in vgk_roster.get('goalies', [])]
         
-        vgk_goalies = [g for g in goalies if g.get('teamAbbrevs') and 'VGK' in g['teamAbbrevs']]
-        vgk_sv_pct = vgk_goalies[0].get('savePct', 0.900) if vgk_goalies else 0.900
-        vgk_goalie_name = vgk_goalies[0].get('lastName', 'Thompson') if vgk_goalies else 'Thompson'
+        opp_roster = client.teams.team_roster(team_abbr=opp_abbr, season="20262027")
+        opp_goalie_ids = [g['id'] for g in opp_roster.get('goalies', [])]
+        
+        goalies = client.stats.goalie_stats_summary(start_season="20262027", end_season="20262027", limit=200) or client.stats.goalie_stats_summary(start_season="20252026", end_season="20252026", limit=200)
+        
+        opp_goalies = [g for g in goalies if g.get('playerId') in opp_goalie_ids]
+        if opp_goalies:
+            opp_goalies.sort(key=lambda x: x.get('gamesPlayed', 0), reverse=True)
+            opp_sv_pct = opp_goalies[0].get('savePct', 0.900)
+            opp_goalie_name = opp_goalies[0].get('lastName', 'Unknown')
+        else:
+            opp_sv_pct = 0.900
+            opp_goalie_name = 'Unknown'
+            
+        vgk_goalies = [g for g in goalies if g.get('playerId') in vgk_goalie_ids]
+        if vgk_goalies:
+            vgk_goalies.sort(key=lambda x: x.get('gamesPlayed', 0), reverse=True)
+            vgk_sv_pct = vgk_goalies[0].get('savePct', 0.900)
+            vgk_goalie_name = vgk_goalies[0].get('lastName', 'Thompson')
+        else:
+            vgk_sv_pct = 0.900
+            vgk_goalie_name = 'Thompson'
+            
     except Exception:
         opp_sv_pct = 0.900
         opp_goalie_name = 'Unknown'

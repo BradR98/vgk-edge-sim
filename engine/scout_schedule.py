@@ -8,14 +8,12 @@ def check_and_trigger():
     print("Scouting for VGK games...")
     client = NHLClient()
     
-    # Try to get the weekly schedule to find today's game
     try:
-        schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
+        games = client.schedule.team_weekly_schedule(team_abbr="VGK")
     except Exception as e:
         print(f"Failed to fetch schedule: {e}")
         return
         
-    games = schedule.get('games', [])
     if not games:
         print("No games in the current schedule window.")
         return

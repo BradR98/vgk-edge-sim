@@ -51,24 +51,24 @@ def check_and_trigger():
     if scout_mode == "MORNING":
         # If the game is within the next 24 hours (1440 minutes)
         if minutes_to_drop < 1440:
-            print("Morning Scout: Game is today. Checking morning lock...")
-            trigger_simulation(game_id, lock_suffix="_MORNING")
+            print("Morning Scout: Game is today. Triggering simulation...")
+            trigger_simulation()
         else:
             print("Morning Scout: No game within 24 hours.")
     else:
-        # Execution Window: 15 to 30 minutes
-        if 15 <= minutes_to_drop <= 30:
-            print("Pregame Scout: Within execution window. Checking pregame lock...")
-            trigger_simulation(game_id, lock_suffix="_PREGAME")
+        # Execution Window: 15 < minutes <= 30 guarantees exactly one trigger for a 15-min cron
+        if 15 < minutes_to_drop <= 30:
+            print("Pregame Scout: Within execution window. Triggering simulation...")
+            trigger_simulation()
         else:
             print("Pregame Scout: Outside execution window. Exiting silently.")
 
-def trigger_simulation(game_id, lock_suffix=""):
+def trigger_simulation():
     gh_token = os.environ.get("GH_TOKEN")
     gh_repo = os.environ.get("GH_REPO")
     
     if not gh_token or not gh_repo:
-        print("GitHub credentials missing. Cannot trigger workflow or check locks. Exiting.")
+        print("GitHub credentials missing. Cannot trigger workflow. Exiting.")
         return
         
     headers = {
@@ -77,40 +77,15 @@ def trigger_simulation(game_id, lock_suffix=""):
         "X-GitHub-Api-Version": "2022-11-28"
     }
     
-    var_name = f"LATEST_SIM_GAME_ID{lock_suffix}"
-    var_url = f"https://api.github.com/repos/{gh_repo}/actions/variables/{var_name}"
-    
-    # 1. Check if we already fired for this game
-    r_var = requests.get(var_url, headers=headers)
-    var_exists = r_var.status_code == 200
-    
-    if var_exists:
-        current_lock = r_var.json().get('value', '')
-        if current_lock == str(game_id):
-            print(f"Lock exists for Game ID {game_id}. Workflow already triggered.")
-            return
-            
-    # 2. Fire the workflow dispatch
+    # Fire the workflow dispatch
     dispatch_url = f"https://api.github.com/repos/{gh_repo}/actions/workflows/Auto_2_Sim.yml/dispatches"
-    payload = {"ref": "main"}
+    payload = {"ref": "master"}
     r_disp = requests.post(dispatch_url, headers=headers, json=payload)
     
     if r_disp.status_code == 204:
         print("Successfully dispatched Auto_2_Sim.yml!")
     else:
         print(f"Failed to dispatch workflow: {r_disp.status_code} {r_disp.text}")
-        return
-        
-    # 3. Update the lock variable
-    var_payload = {"name": var_name, "value": str(game_id)}
-    if var_exists:
-        r_update = requests.patch(var_url, headers=headers, json=var_payload)
-        if r_update.status_code == 204:
-            print(f"Successfully updated {var_name} lock.")
-    else:
-        r_create = requests.post(f"https://api.github.com/repos/{gh_repo}/actions/variables", headers=headers, json=var_payload)
-        if r_create.status_code == 201:
-            print(f"Successfully created {var_name} lock.")
 
 if __name__ == "__main__":
     check_and_trigger()

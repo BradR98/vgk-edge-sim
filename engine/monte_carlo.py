@@ -127,7 +127,7 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
 def run_full_handicap_simulation(
     skaters_df, 
     opp_team_stats, 
-    vgk_goalie_stats, 
+    vgk_goalies_list, 
     opp_goalie_stats, 
     ref_pim_scalar=1.0, 
     iterations=10000
@@ -220,33 +220,38 @@ def run_full_handicap_simulation(
     opp_xg_per_shot = opp_team_stats.get('xg_per_shot', 0.088)
     sim_xga = sim_sa * opp_xg_per_shot
     
-    # Heavy Bayesian Regression for Goalie (Option B: 2 parts league avg, 1 part true stat)
-    goalie_base_sv = vgk_goalie_stats['sv_pct']
-    league_avg_sv = 0.905
-    regressed_sv = (goalie_base_sv + league_avg_sv + league_avg_sv) / 3.0
+    goalie_summaries = []
     
-    # Conversion rate is a blend of opponent shooting talent scaled by goalie talent vs average
-    opp_conversion_rate = opp_xg_per_shot * ((1.0 - regressed_sv) / (1.0 - league_avg_sv))
-    opp_conversion_rate = np.clip(opp_conversion_rate, 0.01, 0.35) # sanity bounds
-    
-    sim_ga = np.random.binomial(n=sim_sa, p=opp_conversion_rate)
-    
-    # Calculate Sv% per run
-    sim_sv_pct = np.where(sim_sa > 0, (sim_sa - sim_ga) / sim_sa, 1.0)
-    
-    # Pull condition at Period 2 (~66% through game)
-    ga_p2 = np.random.binomial(n=sim_ga, p=0.66)
-    vgk_goals_p2 = np.random.binomial(n=total_vgk_goals_per_run, p=0.66)
-    pulled = (ga_p2 >= 4) & ((ga_p2 - vgk_goals_p2) >= 3) | (ga_p2 >= 5)
-    
-    goalie_summary = {
-        "Goalie_Name": vgk_goalie_stats['name'],
-        "Exp_Shots_Against": round(float(np.mean(sim_sa)), 1),
-        "Exp_xGA": round(float(np.mean(sim_xga)), 2),
-        "Exp_GAA": round(float(np.mean(sim_ga)), 2),
-        "Exp_Sv%": round(float(np.mean(sim_sv_pct)), 4),
-        "Pull_Likelihood_%": round(float(np.mean(pulled) * 100), 2)
-    }
-    df_goalie_summary = pd.DataFrame([goalie_summary])
+    for goalie in vgk_goalies_list:
+        # Heavy Bayesian Regression for Goalie (Option B: 2 parts league avg, 1 part true stat)
+        goalie_base_sv = goalie['sv_pct']
+        league_avg_sv = 0.905
+        regressed_sv = (goalie_base_sv + league_avg_sv + league_avg_sv) / 3.0
+        
+        # Conversion rate is a blend of opponent shooting talent scaled by goalie talent vs average
+        opp_conversion_rate = opp_xg_per_shot * ((1.0 - regressed_sv) / (1.0 - league_avg_sv))
+        opp_conversion_rate = np.clip(opp_conversion_rate, 0.01, 0.35) # sanity bounds
+        
+        sim_ga = np.random.binomial(n=sim_sa, p=opp_conversion_rate)
+        
+        # Calculate Sv% per run
+        sim_sv_pct = np.where(sim_sa > 0, (sim_sa - sim_ga) / sim_sa, 1.0)
+        
+        # Pull condition at Period 2 (~66% through game)
+        ga_p2 = np.random.binomial(n=sim_ga, p=0.66)
+        vgk_goals_p2 = np.random.binomial(n=total_vgk_goals_per_run, p=0.66)
+        pulled = (ga_p2 >= 4) & ((ga_p2 - vgk_goals_p2) >= 3) | (ga_p2 >= 5)
+        
+        goalie_summary = {
+            "Goalie_Name": goalie['name'],
+            "Exp_Shots_Against": round(float(np.mean(sim_sa)), 1),
+            "Exp_xGA": round(float(np.mean(sim_xga)), 2),
+            "Exp_GAA": round(float(np.mean(sim_ga)), 2),
+            "Exp_Sv%": round(float(np.mean(sim_sv_pct)), 4),
+            "Pull_Likelihood_%": round(float(np.mean(pulled) * 100), 2)
+        }
+        goalie_summaries.append(goalie_summary)
+        
+    df_goalies_summary = pd.DataFrame(goalie_summaries)
 
-    return df_skaters_summary, df_goalie_summary
+    return df_skaters_summary, df_goalies_summary

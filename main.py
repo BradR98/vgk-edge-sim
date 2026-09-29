@@ -125,36 +125,32 @@ def main():
         vgk_goalies = [g for g in goalies if g.get('playerId') in vgk_goalie_ids]
         if vgk_goalies:
             vgk_goalies.sort(key=lambda x: x.get('gamesPlayed', 0), reverse=True)
-            vgk_sv_pct = vgk_goalies[0].get('savePct', 0.900)
-            vgk_goalie_name = vgk_goalies[0].get('lastName', 'Thompson')
+            vgk_goalies_list = [{'name': g.get('lastName', 'Unknown'), 'sv_pct': g.get('savePct', 0.900)} for g in vgk_goalies[:2]]
         else:
-            vgk_sv_pct = 0.900
-            vgk_goalie_name = 'Thompson'
+            vgk_goalies_list = [{'name': 'Thompson', 'sv_pct': 0.900}]
             
     except Exception:
         opp_sv_pct = 0.900
         opp_goalie_name = 'Unknown'
-        vgk_sv_pct = 0.900
-        vgk_goalie_name = 'Thompson'
+        vgk_goalies_list = [{'name': 'Thompson', 'sv_pct': 0.900}]
         
-    vgk_goalie_stats = {'name': vgk_goalie_name, 'sv_pct': vgk_sv_pct}
     opp_goalie_stats = {'name': opp_goalie_name, 'sv_pct': opp_sv_pct}
     
     print("Enriching DataFrame with player season stats and xG regression...")
     fatigue_df = enrich_fatigue_df(fatigue_df, season="20262027")
     
     print("Running 10,000 Monte Carlo full handicap simulations...")
-    df_skaters, df_goalie = run_full_handicap_simulation(
+    df_skaters, df_goalies = run_full_handicap_simulation(
         fatigue_df, 
         opp_stats, 
-        vgk_goalie_stats, 
+        vgk_goalies_list, 
         opp_goalie_stats, 
         ref_pim_scalar=1.0, 
         iterations=10000
     )
     
     print("\n--- Goalie Pull Risk ---")
-    print(df_goalie.to_string(index=False))
+    print(df_goalies.to_string(index=False))
     
     print("\n--- Skater Results (Top 10) ---")
     print(df_skaters.head(10).to_string(index=False))
@@ -165,8 +161,8 @@ def main():
         try:
             gc = authenticate_gspread()
             sh = get_workbook(gc)
-            update_game_day_tab(sh, df_goalie, df_skaters, metadata)
-            append_sim_ledger(sh, df_goalie, df_skaters, metadata)
+            update_game_day_tab(sh, df_goalies, df_skaters, metadata)
+            append_sim_ledger(sh, df_goalies, df_skaters, metadata)
         except Exception as e:
             print(f"Failed to push to Google Sheets: {e}")
     else:

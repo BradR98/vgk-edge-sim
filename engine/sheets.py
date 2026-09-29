@@ -1,6 +1,7 @@
 import os
 import json
 import gspread
+import gspread_formatting as gsf
 import pandas as pd
 
 def authenticate_gspread():
@@ -33,7 +34,7 @@ def update_game_day_tab(sh, df_goalie, df_skaters, metadata):
     
     # Combine everything with padding
     full_data = [
-        [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}"],
+        [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}", f"Puck Drop: {metadata.get('start_time', 'N/A')}"],
         [], # Row 2 empty separator
         goalie_header,
         goalie_data,
@@ -42,7 +43,42 @@ def update_game_day_tab(sh, df_goalie, df_skaters, metadata):
     ] + skater_data
     
     ws_live.update(range_name="A1", values=full_data)
-    print("Game_Day tab overwritten successfully with Hybrid Layout.")
+    
+    # 3. Conditional Formatting for Top 3
+    target_cols = ["PIM_Over_1.5_%", "Exp_SOG", "SOG_P80", "Anytime_Goal_%", "Exp_Assists", "Over_0.5_Pt_%"]
+    
+    def col_num_to_letter(n):
+        string = ""
+        while n > 0:
+            n, remainder = divmod(n - 1, 26)
+            string = chr(65 + remainder) + string
+        return string
+        
+    rules = gsf.get_conditional_format_rules(ws_live)
+    rules.clear()
+    
+    start_row = 7
+    end_row = 6 + len(skater_data)
+    
+    for col_name in target_cols:
+        if col_name in skater_header:
+            col_idx = skater_header.index(col_name)
+            col_letter = col_num_to_letter(col_idx + 1)
+            range_str = f"{col_letter}{start_row}:{col_letter}{end_row}"
+            
+            formula = f"={col_letter}{start_row}>=LARGE({col_letter}${start_row}:{col_letter}${end_row}, 3)"
+            
+            rule = gsf.ConditionalFormatRule(
+                ranges=[gsf.GridRange.from_a1_range(range_str, ws_live)],
+                booleanRule=gsf.BooleanRule(
+                    condition=gsf.BooleanCondition('CUSTOM_FORMULA', [formula]),
+                    format=gsf.CellFormat(backgroundColor=gsf.color(0.85, 0.93, 0.83))
+                )
+            )
+            rules.append(rule)
+            
+    rules.save()
+    print("Game_Day tab overwritten successfully with Hybrid Layout and Formatting.")
 
 def append_sim_ledger(sh, df_goalie, df_skaters, metadata):
     """Appends to the historical database tab, flagging Record_Type."""

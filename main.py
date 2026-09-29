@@ -23,6 +23,19 @@ def get_game_metadata(client, team_abbr="VGK"):
             game_date = game.get('gameDate', 'N/A')
             away_team = game.get('awayTeam', {}).get('abbrev', 'N/A')
             home_team = game.get('homeTeam', {}).get('abbrev', 'N/A')
+            start_time_utc = game.get('startTimeUTC', 'N/A')
+            
+            start_time_formatted = start_time_utc
+            if start_time_utc != 'N/A':
+                try:
+                    import dateutil.parser
+                    from dateutil import tz
+                    dt = dateutil.parser.isoparse(start_time_utc.replace('Z', '+00:00'))
+                    pt_tz = tz.gettz('America/Los_Angeles')
+                    dt_pt = dt.astimezone(pt_tz)
+                    start_time_formatted = dt_pt.strftime('%I:%M %p PT')
+                except Exception:
+                    pass
             
             opponent = away_team if home_team == team_abbr else home_team
             venue = "Home" if home_team == team_abbr else "Away"
@@ -32,6 +45,7 @@ def get_game_metadata(client, team_abbr="VGK"):
                 "game_date": str(game_date),
                 "opponent": opponent,
                 "venue": venue,
+                "start_time": start_time_formatted,
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }
     except Exception as e:

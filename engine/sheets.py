@@ -17,23 +17,29 @@ def get_workbook(gc):
         raise ValueError("SPREADSHEET_ID not found.")
     return gc.open_by_key(sheet_id)
 
-def update_game_day_tab(sh, df_goalies, df_skaters, metadata):
-    """Overwrites the Game_Day tab for the Canvas HUD with Goalie Block and Skater Grid."""
+def update_game_day_tab(sh, df_lines, df_goalies, df_skaters, metadata):
+    """Overwrites the Game_Day tab for the Canvas HUD with Game Lines, Goalie Block and Skater Grid."""
     ws_live = sh.worksheet("Game_Day")
     ws_live.clear()
     
-    # 1. Build Goalie Block
+    # 1. Build Game Lines Block
+    lines_header = df_lines.columns.values.tolist()
+    lines_data = df_lines.values.tolist()
+    
+    # 2. Build Goalie Block
     goalie_header = df_goalies.columns.values.tolist()
     goalie_data = df_goalies.values.tolist()
     
-    # 2. Build Skater Grid
+    # 3. Build Skater Grid
     skater_header = df_skaters.columns.values.tolist()
     skater_data = df_skaters.values.tolist()
     
     # Combine everything with padding
     full_data = [
         [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}", f"Puck Drop: {metadata.get('start_time', 'N/A')}"],
-        [], # Row 2 empty separator
+        lines_header
+    ] + lines_data + [
+        [], # Empty separator before goalie block
         goalie_header
     ] + goalie_data + [
         [], # Empty separator before skater grid
@@ -41,6 +47,9 @@ def update_game_day_tab(sh, df_goalies, df_skaters, metadata):
     ] + skater_data
     
     ws_live.update(range_name="A1", values=full_data)
+    
+    # Freeze the top 3 rows (Metadata + Game Lines)
+    ws_live.freeze(rows=3)
     
     # 3. Conditional Formatting for Top 3
     target_cols = ["PIM_Over_1.5_%", "Exp_SOG", "SOG_P80", "Anytime_Goal_%", "Exp_Assists", "Over_0.5_Pt_%"]
@@ -55,7 +64,10 @@ def update_game_day_tab(sh, df_goalies, df_skaters, metadata):
     rules = gsf.get_conditional_format_rules(ws_live)
     rules.clear()
     
-    start_row = 6 + len(goalie_data)
+    rules.clear()
+    
+    # Row offsets: 3 (lines block) + 1 (empty) + 1 (goalie header) + len(goalie_data) + 1 (empty) + 1 (skater header) = 7 + len(goalie_data)
+    start_row = 7 + len(goalie_data)
     end_row = start_row + len(skater_data) - 1
     
     for col_name in target_cols:
@@ -78,26 +90,30 @@ def update_game_day_tab(sh, df_goalies, df_skaters, metadata):
     rules.save()
     print("Game_Day tab overwritten successfully with Hybrid Layout and Formatting.")
 
-def update_game_lines_tab(sh, df_lines, metadata):
-    """Overwrites the Game_Lines tab with Team-level metrics and OT odds."""
+def append_team_ledger(sh, df_lines, metadata):
+    """Appends to the historical Team_Ledger tab."""
     try:
-        ws_lines = sh.worksheet("Game_Lines")
+        ws_ledger = sh.worksheet("Team_Ledger")
     except Exception:
-        ws_lines = sh.add_worksheet(title="Game_Lines", rows="100", cols="20")
+        ws_ledger = sh.add_worksheet(title="Team_Ledger", rows="1000", cols="20")
+        # Add headers to new sheet
+        headers = ["game_id", "game_date", "opponent", "venue", "sim_timestamp_utc"] + df_lines.columns.values.tolist()
+        ws_ledger.update(range_name="A1", values=[headers])
         
-    ws_lines.clear()
+    ledger_lines = df_lines.copy()
     
-    header = df_lines.columns.values.tolist()
-    data = df_lines.values.tolist()
+    # Insert Metadata at the very front
+    ledger_lines.insert(0, "game_id", metadata.get("game_id", "N/A"))
+    ledger_lines.insert(1, "game_date", metadata.get("game_date", "N/A"))
+    ledger_lines.insert(2, "opponent", metadata.get("opponent", "N/A"))
+    ledger_lines.insert(3, "venue", metadata.get("venue", "N/A"))
+    ledger_lines.insert(4, "sim_timestamp_utc", metadata.get("timestamp", "N/A"))
     
-    full_data = [
-        [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}", f"Puck Drop: {metadata.get('start_time', 'N/A')}"],
-        [],
-        header
-    ] + data
+    ledger_lines = ledger_lines.fillna("")
+    data = ledger_lines.values.tolist()
     
-    ws_lines.update(range_name="A1", values=full_data)
-    print("Game_Lines tab overwritten successfully.")
+    ws_ledger.append_rows(values=data, value_input_option="USER_ENTERED")
+    print("Team_Ledger tab appended successfully.")
 
 def append_sim_ledger(sh, df_goalies, df_skaters, metadata):
     """Appends to the historical database tab, flagging Record_Type."""

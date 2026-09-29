@@ -46,14 +46,24 @@ def check_and_trigger():
     
     print(f"Next Game ID: {game_id} starts in {minutes_to_drop:.1f} minutes.")
     
-    # Execution Window: 15 to 30 minutes
-    if 15 <= minutes_to_drop <= 30:
-        print("Within execution window. Checking lock...")
-        trigger_simulation(game_id)
+    scout_mode = os.environ.get("SCOUT_MODE", "PREGAME")
+    
+    if scout_mode == "MORNING":
+        # If the game is within the next 24 hours (1440 minutes)
+        if minutes_to_drop < 1440:
+            print("Morning Scout: Game is today. Checking morning lock...")
+            trigger_simulation(game_id, lock_suffix="_MORNING")
+        else:
+            print("Morning Scout: No game within 24 hours.")
     else:
-        print("Outside execution window. Exiting silently.")
+        # Execution Window: 15 to 30 minutes
+        if 15 <= minutes_to_drop <= 30:
+            print("Pregame Scout: Within execution window. Checking pregame lock...")
+            trigger_simulation(game_id, lock_suffix="_PREGAME")
+        else:
+            print("Pregame Scout: Outside execution window. Exiting silently.")
 
-def trigger_simulation(game_id):
+def trigger_simulation(game_id, lock_suffix=""):
     gh_token = os.environ.get("GH_TOKEN")
     gh_repo = os.environ.get("GH_REPO")
     
@@ -67,7 +77,8 @@ def trigger_simulation(game_id):
         "X-GitHub-Api-Version": "2022-11-28"
     }
     
-    var_url = f"https://api.github.com/repos/{gh_repo}/actions/variables/LATEST_SIM_GAME_ID"
+    var_name = f"LATEST_SIM_GAME_ID{lock_suffix}"
+    var_url = f"https://api.github.com/repos/{gh_repo}/actions/variables/{var_name}"
     
     # 1. Check if we already fired for this game
     r_var = requests.get(var_url, headers=headers)
@@ -91,15 +102,15 @@ def trigger_simulation(game_id):
         return
         
     # 3. Update the lock variable
-    var_payload = {"name": "LATEST_SIM_GAME_ID", "value": str(game_id)}
+    var_payload = {"name": var_name, "value": str(game_id)}
     if var_exists:
         r_update = requests.patch(var_url, headers=headers, json=var_payload)
         if r_update.status_code == 204:
-            print("Successfully updated LATEST_SIM_GAME_ID lock.")
+            print(f"Successfully updated {var_name} lock.")
     else:
         r_create = requests.post(f"https://api.github.com/repos/{gh_repo}/actions/variables", headers=headers, json=var_payload)
         if r_create.status_code == 201:
-            print("Successfully created LATEST_SIM_GAME_ID lock.")
+            print(f"Successfully created {var_name} lock.")
 
 if __name__ == "__main__":
     check_and_trigger()

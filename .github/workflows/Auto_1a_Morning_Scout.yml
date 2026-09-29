@@ -1,9 +1,9 @@
-name: Auto_1_Scout_Game_Time
+name: Auto_1a_Morning_Scout
 
 on:
   schedule:
-    # Runs every 15 mins during prime NHL puck drop windows (22:00 to 05:00 UTC)
-    - cron: '*/15 22-5 * * *'
+    # Runs at 15:00 UTC (8:00 AM Pacific) every day
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 jobs:
@@ -24,5 +24,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          SCOUT_MODE: PREGAME
+          SCOUT_MODE: MORNING
         run: python engine/scout_schedule.py

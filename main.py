@@ -6,7 +6,7 @@ import numpy as np
 
 from engine.ingest import build_fatigue_matrix
 from engine.monte_carlo import enrich_fatigue_df, run_full_handicap_simulation, get_upcoming_opponent
-from engine.sheets import authenticate_gspread, get_workbook, update_game_day_tab, append_sim_ledger
+from engine.sheets import authenticate_gspread, get_workbook, update_game_day_tab, update_game_lines_tab, append_sim_ledger
 
 def get_game_metadata(client, team_abbr="VGK"):
     try:
@@ -140,7 +140,7 @@ def main():
     fatigue_df = enrich_fatigue_df(fatigue_df, season="20262027")
     
     print("Running 10,000 Monte Carlo full handicap simulations...")
-    df_skaters, df_goalies = run_full_handicap_simulation(
+    df_skaters, df_goalies, df_lines = run_full_handicap_simulation(
         fatigue_df, 
         opp_stats, 
         vgk_goalies_list, 
@@ -148,6 +148,9 @@ def main():
         ref_pim_scalar=1.0, 
         iterations=10000
     )
+    
+    print("\n--- Game Lines (Team Totals & OT) ---")
+    print(df_lines.to_string(index=False))
     
     print("\n--- Goalie Pull Risk ---")
     print(df_goalies.to_string(index=False))
@@ -162,6 +165,7 @@ def main():
             gc = authenticate_gspread()
             sh = get_workbook(gc)
             update_game_day_tab(sh, df_goalies, df_skaters, metadata)
+            update_game_lines_tab(sh, df_lines, metadata)
             append_sim_ledger(sh, df_goalies, df_skaters, metadata)
         except Exception as e:
             print(f"Failed to push to Google Sheets: {e}")

@@ -78,6 +78,27 @@ def update_game_day_tab(sh, df_goalies, df_skaters, metadata):
     rules.save()
     print("Game_Day tab overwritten successfully with Hybrid Layout and Formatting.")
 
+def update_game_lines_tab(sh, df_lines, metadata):
+    """Overwrites the Game_Lines tab with Team-level metrics and OT odds."""
+    try:
+        ws_lines = sh.worksheet("Game_Lines")
+    except Exception:
+        ws_lines = sh.add_worksheet(title="Game_Lines", rows="100", cols="20")
+        
+    ws_lines.clear()
+    
+    header = df_lines.columns.values.tolist()
+    data = df_lines.values.tolist()
+    
+    full_data = [
+        [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}", f"Puck Drop: {metadata.get('start_time', 'N/A')}"],
+        [],
+        header
+    ] + data
+    
+    ws_lines.update(range_name="A1", values=full_data)
+    print("Game_Lines tab overwritten successfully.")
+
 def append_sim_ledger(sh, df_goalies, df_skaters, metadata):
     """Appends to the historical database tab, flagging Record_Type."""
     ws_ledger = sh.worksheet("Sim_Ledger")

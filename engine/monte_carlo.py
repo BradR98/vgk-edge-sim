@@ -221,8 +221,9 @@ def run_full_handicap_simulation(
     sim_xga = sim_sa * opp_xg_per_shot
     
     goalie_summaries = []
+    starter_sim_ga = None
     
-    for goalie in vgk_goalies_list:
+    for idx, goalie in enumerate(vgk_goalies_list):
         # Heavy Bayesian Regression for Goalie (Option B: 2 parts league avg, 1 part true stat)
         goalie_base_sv = goalie['sv_pct']
         league_avg_sv = 0.905
@@ -234,6 +235,10 @@ def run_full_handicap_simulation(
         
         sim_ga = np.random.binomial(n=sim_sa, p=opp_conversion_rate)
         
+        # Stash the starter's goals allowed array for OT calculations
+        if idx == 0:
+            starter_sim_ga = sim_ga
+            
         # Calculate Sv% per run
         sim_sv_pct = np.where(sim_sa > 0, (sim_sa - sim_ga) / sim_sa, 1.0)
         
@@ -253,5 +258,32 @@ def run_full_handicap_simulation(
         goalie_summaries.append(goalie_summary)
         
     df_goalies_summary = pd.DataFrame(goalie_summaries)
+    
+    # ---------------------------------------------------------
+    # 7. GAME LINES & OT SIMULATION (Team Aggregates)
+    # ---------------------------------------------------------
+    # Sum the raw simulated arrays across all 18 skaters for each run
+    vgk_sog_per_run = sim_sog.sum(axis=0)
+    vgk_xg_per_run = sim_xg.sum(axis=0)
+    vgk_assists_per_run = sim_assists.sum(axis=0)
+    
+    # Compare VGK goals to Opponent goals (assuming the Starter is in net)
+    if starter_sim_ga is not None:
+        ot_likelihood = np.mean(total_vgk_goals_per_run == starter_sim_ga) * 100
+    else:
+        ot_likelihood = 0.0
+        
+    game_lines = {
+        "Exp_VGK_Goals": round(float(np.mean(total_vgk_goals_per_run)), 2),
+        "Exp_VGK_xG": round(float(np.mean(vgk_xg_per_run)), 2),
+        "Exp_VGK_Assists": round(float(np.mean(vgk_assists_per_run)), 2),
+        "Exp_VGK_SOG": round(float(np.mean(vgk_sog_per_run)), 1),
+        "Exp_Opp_Goals": round(float(np.mean(starter_sim_ga)) if starter_sim_ga is not None else 0.0, 2),
+        "Exp_Opp_xG": round(float(np.mean(sim_xga)), 2),
+        "Exp_Opp_SOG": round(float(np.mean(sim_sa)), 1),
+        "OT_Likelihood_%": round(float(ot_likelihood), 2)
+    }
+    
+    df_game_lines = pd.DataFrame([game_lines])
 
-    return df_skaters_summary, df_goalies_summary
+    return df_skaters_summary, df_goalies_summary, df_game_lines

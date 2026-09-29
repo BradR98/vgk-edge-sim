@@ -34,41 +34,77 @@ def enrich_fatigue_df(fatigue_df, season="20262027"):
     for idx, row in fatigue_df.iterrows():
         pid = row['Player_ID']
         try:
-            stats = client.stats.player_career_stats(player_id=pid)
-            season_totals = stats.get('seasonTotals', [])
-            reg_stats = [s for s in season_totals if str(s.get('season')) == season and s.get('gameTypeId') == 2]
-            if not reg_stats:
-                reg_stats = [s for s in season_totals if str(s.get('season')) == "20252026" and s.get('gameTypeId') == 2]
+            import os
+            rolling_window = int(os.environ.get('ROLLING_GAMES_WINDOW', 15))
             
-            if reg_stats:
-                st = reg_stats[0]
-                shots = st.get('shots', 0)
-                goals = st.get('goals', 0)
-                assists = st.get('assists', 0)
-                pim = st.get('pim', 0)
-                avg_toi_str = st.get('avgToi', "00:00")
-                avg_toi = parse_duration_to_minutes(avg_toi_str)
-                gp = st.get('gamesPlayed', 1)
-                shooting_pct = st.get('shootingPctg', 0.0)
+            try:
+                curr_log = client.stats.player_game_log(player_id=str(pid), season_id=season, game_type=2)
+            except Exception:
+                curr_log = []
                 
-                sog_per_60 = (shots / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
-                pim_per_60 = (pim / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
-                
-                pos = row.get('Position', 'F')
-                league_avg_pos = 0.045 if pos == 'D' else 0.105
-                
-                # Use regressed shooting pct as proxy for xG per shot
-                p_base = (shots / (shots + 80)) * shooting_pct + (1 - shots / (shots + 80)) * league_avg_pos
-                xg_per_shot = p_base
-                
-                assist_share = assists / team_goals if team_goals > 0 else 0
+            curr_games_played = len(curr_log)
+            shots, goals, assists, pim, total_toi = 0.0, 0.0, 0.0, 0.0, 0.0
+            
+            if curr_games_played >= rolling_window:
+                target_games = curr_log[:rolling_window]
+                shots = sum(g.get('shots', 0) for g in target_games)
+                goals = sum(g.get('goals', 0) for g in target_games)
+                assists = sum(g.get('assists', 0) for g in target_games)
+                pim = sum(g.get('pim', 0) for g in target_games)
+                total_toi = sum(parse_duration_to_minutes(g.get('toi', "00:00")) for g in target_games)
+                gp = rolling_window
+                avg_toi = total_toi / rolling_window if rolling_window > 0 else 0
             else:
-                sog_per_60 = 0
-                pim_per_60 = 0
-                xg_per_shot = 0
-                assist_share = 0
-                avg_toi = 0.0
-                pos = row.get('Position', 'F')
+                missing_games = rolling_window - curr_games_played
+                shots = sum(g.get('shots', 0) for g in curr_log)
+                goals = sum(g.get('goals', 0) for g in curr_log)
+                assists = sum(g.get('assists', 0) for g in curr_log)
+                pim = sum(g.get('pim', 0) for g in curr_log)
+                total_toi = sum(parse_duration_to_minutes(g.get('toi', "00:00")) for g in curr_log)
+                
+                pad_shots, pad_goals, pad_assists, pad_pim, pad_toi_per_game = 0.0, 0.0, 0.0, 0.0, 0.0
+                try:
+                    stats = client.stats.player_career_stats(player_id=pid)
+                    season_totals = stats.get('seasonTotals', [])
+                    prev_season = "20252026" if season == "20262027" else str(int(season) - 10001)
+                    prev_stats = [s for s in season_totals if str(s.get('season')) == prev_season and s.get('gameTypeId') == 2]
+                    
+                    if not prev_stats:
+                        prev_stats = [s for s in season_totals if str(s.get('season')) == season and s.get('gameTypeId') == 2]
+                    
+                    if prev_stats:
+                        st = prev_stats[0]
+                        prev_gp = st.get('gamesPlayed', 1)
+                        if prev_gp > 0:
+                            pad_shots = (st.get('shots', 0) / prev_gp) * missing_games
+                            pad_goals = (st.get('goals', 0) / prev_gp) * missing_games
+                            pad_assists = (st.get('assists', 0) / prev_gp) * missing_games
+                            pad_pim = (st.get('pim', 0) / prev_gp) * missing_games
+                            pad_toi_per_game = parse_duration_to_minutes(st.get('avgToi', "00:00"))
+                except Exception:
+                    pass
+                
+                shots += pad_shots
+                goals += pad_goals
+                assists += pad_assists
+                pim += pad_pim
+                total_padded_toi = total_toi + (pad_toi_per_game * missing_games)
+                gp = rolling_window
+                avg_toi = total_padded_toi / rolling_window if rolling_window > 0 else 0
+                
+            shooting_pct = goals / shots if shots > 0 else 0.0
+            sog_per_60 = (shots / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
+            pim_per_60 = (pim / gp) / (avg_toi / 60) if avg_toi > 0 and gp > 0 else 0
+            
+            pos = row.get('Position', 'F')
+            league_avg_pos = 0.045 if pos == 'D' else 0.105
+            
+            p_base = (shots / (shots + 80)) * shooting_pct + (1 - shots / (shots + 80)) * league_avg_pos
+            xg_per_shot = p_base
+            
+            team_goals_per_game = team_goals / 82.0 if team_goals > 0 else 3.0
+            assist_share = (assists / gp) / team_goals_per_game if team_goals_per_game > 0 else 0
+
         except Exception as e:
             sog_per_60 = 0
             pim_per_60 = 0

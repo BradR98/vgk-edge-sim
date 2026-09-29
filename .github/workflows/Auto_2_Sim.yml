@@ -21,4 +21,5 @@ jobs:
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          ROLLING_GAMES_WINDOW: 15
         run: python main.py

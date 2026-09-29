@@ -220,9 +220,15 @@ def run_full_handicap_simulation(
     opp_xg_per_shot = opp_team_stats.get('xg_per_shot', 0.088)
     sim_xga = sim_sa * opp_xg_per_shot
     
-    # Actual goals allowed by starting goalie
+    # Heavy Bayesian Regression for Goalie (Option B: 2 parts league avg, 1 part true stat)
     goalie_base_sv = vgk_goalie_stats['sv_pct']
-    opp_conversion_rate = 1.0 - goalie_base_sv
+    league_avg_sv = 0.905
+    regressed_sv = (goalie_base_sv + league_avg_sv + league_avg_sv) / 3.0
+    
+    # Conversion rate is a blend of opponent shooting talent scaled by goalie talent vs average
+    opp_conversion_rate = opp_xg_per_shot * ((1.0 - regressed_sv) / (1.0 - league_avg_sv))
+    opp_conversion_rate = np.clip(opp_conversion_rate, 0.01, 0.35) # sanity bounds
+    
     sim_ga = np.random.binomial(n=sim_sa, p=opp_conversion_rate)
     
     # Calculate Sv% per run

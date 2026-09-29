@@ -78,17 +78,28 @@ def main():
         
         if opp_team_stats_lst:
             shots_against = opp_team_stats_lst[0].get('shotsAgainstPerGame', 30.0)
-            opp_xg_per_shot = 0.088 # Base proxy if missing
+            shots_for = opp_team_stats_lst[0].get('shotsForPerGame', 30.0)
+            goals_for = opp_team_stats_lst[0].get('goalsForPerGame', 3.0)
+            
+            opp_xg_per_shot = goals_for / shots_for if shots_for > 0 else 0.088
+            
+            # If Chicago gives up 33 shots/game against a league avg of ~30, suppression = 1.10 (VGK shoots 10% more)
+            shot_suppression = shots_against / 30.0 if shots_against > 0 else 1.0
         else:
             shots_against = 30.0
             opp_xg_per_shot = 0.088
+            shot_suppression = 1.0
     except Exception:
         shots_against = 30.0
         opp_xg_per_shot = 0.088
+        shot_suppression = 1.0
         
     opp_stats = {
-        'shots_per_game': shots_against,
-        'shot_suppression_factor': 1.0, 
+        'shots_per_game': shots_against, # wait, shots_against is how many shots the opponent gives up? Wait.
+        # Let's clarify: in monte_carlo.py, `opp_team_stats['shots_per_game']` is used for `exp_shots_against` (VGK goalie facing shots).
+        # So we need shots_for!
+        'shots_per_game': shots_for if opp_team_stats_lst else 30.0,
+        'shot_suppression_factor': shot_suppression, 
         'xg_per_shot': opp_xg_per_shot
     }
     

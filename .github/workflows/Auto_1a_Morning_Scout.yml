@@ -2,8 +2,8 @@ name: Auto_1a_Morning_Scout
 
 on:
   schedule:
-    # Runs at 15:00 UTC (8:00 AM Pacific) every day
-    - cron: '0 15 * * *'
+    # Runs at 13:17 UTC (6:17 AM Pacific) every day to bypass GitHub's top-of-the-hour queue
+    - cron: '17 13 * * *'
   workflow_dispatch:
 
 jobs:

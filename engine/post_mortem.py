@@ -258,36 +258,36 @@ def run_post_mortem():
                     
                 # We want the row index for batch_update (1-indexed, +1 for header = enumerate + 2)
                 for idx, tr in enumerate(team_records):
-                if str(tr.get('game_id')) == str(target_game_id):
-                    # Audit Goals
-                    exp_vgk_goals = tr.get('Exp_VGK_Goals', 0)
-                    exp_opp_goals = tr.get('Exp_Opp_Goals', 0)
-                    act_vgk_goals = team_actuals.get('vgk_goals', 0)
-                    act_opp_goals = team_actuals.get('opp_goals', 0)
-                    audit_rows.append([target_game_id, "VGK", "TEAM", "Goals", exp_vgk_goals, act_vgk_goals, round(act_vgk_goals - exp_vgk_goals, 2)])
-                    audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "Goals", exp_opp_goals, act_opp_goals, round(act_opp_goals - exp_opp_goals, 2)])
-                    
-                    # Audit SOG
-                    exp_vgk_sog = tr.get('Exp_VGK_SOG', 0)
-                    exp_opp_sog = tr.get('Exp_Opp_SOG', 0)
-                    act_vgk_sog = team_actuals.get('vgk_sog', 0)
-                    act_opp_sog = team_actuals.get('opp_sog', 0)
-                    audit_rows.append([target_game_id, "VGK", "TEAM", "SOG", exp_vgk_sog, act_vgk_sog, round(act_vgk_sog - exp_vgk_sog, 2)])
-                    audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "SOG", exp_opp_sog, act_opp_sog, round(act_opp_sog - exp_opp_sog, 2)])
-                    
-                    # Backfill Team_Ledger Actuals columns (Columns N through R)
-                    # Headers are 13 columns long, so we update the 5 actual columns at the end
-                    # Column letters: 13=M, so N to R
-                    row_num = idx + 2
-                    went_to_ot = "TRUE" if team_actuals.get('went_to_ot') else "FALSE"
-                    team_updates.append({
-                        'range': f'N{row_num}:R{row_num}',
-                        'values': [[act_vgk_goals, act_vgk_sog, act_opp_goals, act_opp_sog, went_to_ot]]
-                    })
-            
-            if team_updates:
-                ws_team.batch_update(team_updates)
-                print(f"Backfilled actuals for {len(team_updates)} Team_Ledger rows.")
+                    if str(tr.get('game_id')) == str(target_game_id):
+                        # Audit Goals
+                        exp_vgk_goals = tr.get('Exp_VGK_Goals', 0)
+                        exp_opp_goals = tr.get('Exp_Opp_Goals', 0)
+                        act_vgk_goals = team_actuals.get('vgk_goals', 0)
+                        act_opp_goals = team_actuals.get('opp_goals', 0)
+                        audit_rows.append([target_game_id, "VGK", "TEAM", "Goals", exp_vgk_goals, act_vgk_goals, round(act_vgk_goals - exp_vgk_goals, 2)])
+                        audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "Goals", exp_opp_goals, act_opp_goals, round(act_opp_goals - exp_opp_goals, 2)])
+                        
+                        # Audit SOG
+                        exp_vgk_sog = tr.get('Exp_VGK_SOG', 0)
+                        exp_opp_sog = tr.get('Exp_Opp_SOG', 0)
+                        act_vgk_sog = team_actuals.get('vgk_sog', 0)
+                        act_opp_sog = team_actuals.get('opp_sog', 0)
+                        audit_rows.append([target_game_id, "VGK", "TEAM", "SOG", exp_vgk_sog, act_vgk_sog, round(act_vgk_sog - exp_vgk_sog, 2)])
+                        audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "SOG", exp_opp_sog, act_opp_sog, round(act_opp_sog - exp_opp_sog, 2)])
+                        
+                        # Backfill Team_Ledger Actuals columns (Columns N through R)
+                        # Headers are 13 columns long, so we update the 5 actual columns at the end
+                        # Column letters: 13=M, so N to R
+                        row_num = idx + 2
+                        went_to_ot = "TRUE" if team_actuals.get('went_to_ot') else "FALSE"
+                        team_updates.append({
+                            'range': f'N{row_num}:R{row_num}',
+                            'values': [[act_vgk_goals, act_vgk_sog, act_opp_goals, act_opp_sog, went_to_ot]]
+                        })
+                
+                if team_updates:
+                    ws_team.batch_update(team_updates)
+                    print(f"Backfilled actuals for {len(team_updates)} Team_Ledger rows.")
                 
         except Exception as e:
             print(f"Team ledger audit failed: {e}")

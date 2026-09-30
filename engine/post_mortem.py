@@ -137,62 +137,140 @@ def run_post_mortem():
             if alias.strip():
                 player_mapping[alias.strip().lower()] = box_name
     
-    # 2. Find Most Recent Past Game ID
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    try:
-        schedule = client.schedule.team_season_schedule(team_abbr="VGK", season="20262027")
-        games = schedule.get("games", [])
-    except Exception as e:
-        print(f"Could not fetch NHL schedule: {e}. Exiting gracefully.")
-        return
-    
-    target_game_id = None
-    # Sort games by date descending to find the most recent past game
-    past_games = sorted([g for g in games if g.get('gameDate') < today_str], key=lambda x: x.get('gameDate'), reverse=True)
-    if past_games:
-        target_game_id = past_games[0]['id']
-        game_date = past_games[0]['gameDate']
-        print(f"Targeting most recent past game: {target_game_id} on {game_date}")
-            
-    if not target_game_id:
-        print(f"No past VGK games found. Exiting.")
+    # 2. Find all unique Game_IDs with ungraded wagers in Wager_Tracker
+    wagers_raw = ws_wagers.get_all_values()
+    if len(wagers_raw) < 2:
+        print("No wagers found in Wager_Tracker. Exiting.")
         return
 
-    # 3. Pull Final Boxscore
-    try:
-        boxscore = client.game_center.boxscore(game_id=target_game_id)
-        actuals, team_actuals = parse_boxscore_stats(boxscore)
-    except Exception as e:
-        print(f"Failed to fetch boxscore for {target_game_id}: {e}")
+    wager_headers = wagers_raw[0]
+    wager_records = []
+    for row in wagers_raw[1:]:
+        record = {}
+        for i, val in enumerate(row):
+            if i < len(wager_headers):
+                record[wager_headers[i]] = val
+        wager_records.append(record)
+
+    # Collect unique game IDs that have at least one ungraded wager
+    # Grade column index = 7 (col H, 0-indexed)
+    grade_col_idx = wager_headers.index('Grade') if 'Grade' in wager_headers else 7
+    ungraded_game_ids = list(dict.fromkeys(
+        str(r.get('Game_ID', '')).strip()
+        for r in wager_records
+        if not str(r.get('Grade', '')).strip() and str(r.get('Game_ID', '')).strip()
+    ))
+
+    if not ungraded_game_ids:
+        print("No ungraded wagers found. Nothing to do.")
         return
 
-    # 4. Grade Open Wagers
-    wagers = ws_wagers.get_all_records()
-    updates = []
-    
+    print(f"Found {len(ungraded_game_ids)} game(s) with ungraded wagers: {ungraded_game_ids}")
+
+    # 3. Maintain a running bankroll starting from the last graded entry
     current_bankroll = 1000.00
-    for w in wagers:
-        if w.get('Running_Bankroll'):
+    for r in wager_records:
+        if str(r.get('Running_Bankroll', '')).strip():
             try:
-                current_bankroll = float(w['Running_Bankroll'])
+                current_bankroll = float(r['Running_Bankroll'])
             except:
                 pass
-    
-    for i, wager in enumerate(wagers):
-        if str(wager.get('Game_ID')) == str(target_game_id) and not wager.get('Grade'):
+
+    # Preload sheets needed for audit
+    try:
+        ws_ledger = sh.worksheet("Sim_Ledger")
+        sim_raw = ws_ledger.get_all_values()
+        sim_headers = sim_raw[0] if sim_raw else []
+        clean_sim_headers = []
+        for i, h in enumerate(sim_headers):
+            if not h:
+                clean_sim_headers.append(f"BLANK_{i}")
+            elif h in clean_sim_headers:
+                clean_sim_headers.append(f"{h}_{i}")
+            else:
+                clean_sim_headers.append(h)
+        sim_records = []
+        for row in sim_raw[1:]:
+            rec = {}
+            for i, val in enumerate(row):
+                if i < len(clean_sim_headers):
+                    try:
+                        rec[clean_sim_headers[i]] = float(val) if '.' in str(val) else int(val)
+                    except (ValueError, TypeError):
+                        rec[clean_sim_headers[i]] = val
+            sim_records.append(rec)
+    except Exception as e:
+        print(f"Could not load Sim_Ledger: {e}")
+        sim_records = []
+
+    try:
+        ws_team = sh.worksheet("Team_Ledger")
+        team_raw = ws_team.get_all_values()
+        team_headers = team_raw[0] if team_raw else []
+        clean_team_headers = []
+        for i, h in enumerate(team_headers):
+            if not h:
+                clean_team_headers.append(f"BLANK_{i}")
+            elif h in clean_team_headers:
+                clean_team_headers.append(f"{h}_{i}")
+            else:
+                clean_team_headers.append(h)
+        team_records = []
+        for row in team_raw[1:]:
+            rec = {}
+            for i, val in enumerate(row):
+                if i < len(clean_team_headers):
+                    try:
+                        rec[clean_team_headers[i]] = float(val) if '.' in str(val) else int(val)
+                    except (ValueError, TypeError):
+                        rec[clean_team_headers[i]] = val
+            team_records.append(rec)
+    except Exception as e:
+        print(f"Could not load Team_Ledger: {e}")
+        team_records = []
+
+    # 4. Process each ungraded game
+    all_wager_updates = []
+    all_audit_rows = []
+    all_team_updates = []
+
+    for game_id_str in ungraded_game_ids:
+        try:
+            game_id = int(game_id_str)
+        except ValueError:
+            print(f"Skipping invalid Game_ID: {game_id_str}")
+            continue
+
+        print(f"\n--- Grading Game {game_id} ---")
+
+        # Fetch boxscore
+        try:
+            boxscore = client.game_center.boxscore(game_id=game_id)
+            actuals, team_actuals = parse_boxscore_stats(boxscore)
+        except Exception as e:
+            print(f"Failed to fetch boxscore for {game_id}: {e}. Skipping.")
+            continue
+
+        # Grade all ungraded wagers for this game
+        for i, wager in enumerate(wager_records):
+            if str(wager.get('Game_ID', '')).strip() != game_id_str:
+                continue
+            if str(wager.get('Grade', '')).strip():
+                continue  # already graded
+
             player = str(wager.get('Player', ''))
             market = str(wager.get('Market', '')).lower()
-            
+
             try:
                 line = float(wager.get('Line', 0))
                 stake = float(wager.get('Stake', 0))
                 odds = int(wager.get('Odds', -110))
             except Exception:
                 continue
-            
+
             player_actuals = get_actuals_for_player(actuals, player, player_mapping)
             actual_stat = player_actuals.get(market, 0)
-            
+
             if actual_stat > line:
                 grade = "WIN"
                 profit = calculate_payout(odds, stake)
@@ -204,161 +282,72 @@ def run_post_mortem():
                 grade = "LOSS"
                 profit = -stake
                 current_bankroll -= stake
-                
-            # H I J K mapping: Actual, Grade, Payout, Running_Bankroll
-            # Index i+2 because lists are 0-indexed and headers are row 1
-            updates.append({
-                'range': f'G{i+2}:J{i+2}', 
+
+            all_wager_updates.append({
+                'range': f'G{i+2}:J{i+2}',
                 'values': [[actual_stat, grade, round(profit, 2), round(current_bankroll, 2)]]
             })
 
-    if updates:
-        ws_wagers.batch_update(updates)
-        print(f"Graded {len(updates)} wagers. New Bankroll: ${current_bankroll:.2f}")
-    else:
-        print("No open wagers to grade for this game.")
-
-    # 5. Run the Model Audit
-    try:
-        ws_ledger = sh.worksheet("Sim_Ledger")
-        raw_data = ws_ledger.get_all_values()
-        
-        if len(raw_data) < 2:
-            print("No sim ledger records found for this game. Skipping audit.")
-            return
-            
-        headers = raw_data[0]
-        # Deduplicate and clean headers
-        clean_headers = []
-        for i, h in enumerate(headers):
-            if not h or h == "":
-                clean_headers.append(f"BLANK_{i}")
-            elif h in clean_headers:
-                clean_headers.append(f"{h}_{i}")
-            else:
-                clean_headers.append(h)
-                
-        ledger_records = []
-        for row in raw_data[1:]:
-            record = {}
-            for i, val in enumerate(row):
-                if i < len(clean_headers):
-                    try:
-                        # Convert numeric strings to floats if possible, just like get_all_records does
-                        record[clean_headers[i]] = float(val) if '.' in val else int(val)
-                    except ValueError:
-                        record[clean_headers[i]] = val
-            ledger_records.append(record)
-        
-        # Filter ledger for yesterday's game
-        game_projections = [r for r in ledger_records if str(r.get('game_id')) == str(target_game_id)]
-        
-        if not game_projections:
-            print("No sim ledger records found for this game. Skipping audit.")
-            return
-            
-        audit_rows = []
+        # Model Audit: Sim_Ledger projections vs actuals
+        game_projections = [r for r in sim_records if str(r.get('game_id')) == game_id_str]
         for proj in game_projections:
             name = proj.get('Name')
             record_type = proj.get('Record_Type')
             act = get_actuals_for_player(actuals, str(name), player_mapping)
-            
             if not act:
                 continue
-                
             if record_type == "SKATER":
-                # Check SOG
                 exp_sog = proj.get('Exp_SOG', 0)
                 act_sog = act.get('sog', 0)
-                audit_rows.append([target_game_id, name, record_type, "SOG", exp_sog, act_sog, round(act_sog - exp_sog, 2)])
-                
-                # Check Goals
+                all_audit_rows.append([game_id, name, record_type, "SOG", exp_sog, act_sog, round(act_sog - exp_sog, 2)])
                 exp_goals = proj.get('Exp_Goals', 0)
                 act_goals = act.get('goals', 0)
-                audit_rows.append([target_game_id, name, record_type, "Goals", exp_goals, act_goals, round(act_goals - exp_goals, 2)])
-                
+                all_audit_rows.append([game_id, name, record_type, "Goals", exp_goals, act_goals, round(act_goals - exp_goals, 2)])
             elif record_type == "GOALIE":
-                # Check Shots Against
                 exp_sa = proj.get('Exp_Shots_Against', 0)
                 act_sa = act.get('shots against', 0)
-                audit_rows.append([target_game_id, name, record_type, "Shots Against", exp_sa, act_sa, round(act_sa - exp_sa, 2)])
-                
-                # Check Goals Against
+                all_audit_rows.append([game_id, name, record_type, "Shots Against", exp_sa, act_sa, round(act_sa - exp_sa, 2)])
                 exp_ga = proj.get('Exp_GAA', 0)
                 act_ga = act.get('goals against', 0)
-                audit_rows.append([target_game_id, name, record_type, "Goals Against", exp_ga, act_ga, round(act_ga - exp_ga, 2)])
-                
-        # 5b. Audit Team Lines (VGK and Opponent)
-        try:
-            ws_team = sh.worksheet("Team_Ledger")
-            team_raw_data = ws_team.get_all_values()
-            
-            team_updates = []
-            
-            if len(team_raw_data) >= 2:
-                team_headers = team_raw_data[0]
-                team_clean_headers = []
-                for i, h in enumerate(team_headers):
-                    if not h or h == "":
-                        team_clean_headers.append(f"BLANK_{i}")
-                    elif h in team_clean_headers:
-                        team_clean_headers.append(f"{h}_{i}")
-                    else:
-                        team_clean_headers.append(h)
-                
-                team_records = []
-                for row in team_raw_data[1:]:
-                    record = {}
-                    for i, val in enumerate(row):
-                        if i < len(team_clean_headers):
-                            try:
-                                record[team_clean_headers[i]] = float(val) if '.' in val else int(val)
-                            except ValueError:
-                                record[team_clean_headers[i]] = val
-                    team_records.append(record)
-                    
-                # We want the row index for batch_update (1-indexed, +1 for header = enumerate + 2)
-                for idx, tr in enumerate(team_records):
-                    if str(tr.get('game_id')) == str(target_game_id):
-                        # Audit Goals
-                        exp_vgk_goals = tr.get('Exp_VGK_Goals', 0)
-                        exp_opp_goals = tr.get('Exp_Opp_Goals', 0)
-                        act_vgk_goals = team_actuals.get('vgk_goals', 0)
-                        act_opp_goals = team_actuals.get('opp_goals', 0)
-                        audit_rows.append([target_game_id, "VGK", "TEAM", "Goals", exp_vgk_goals, act_vgk_goals, round(act_vgk_goals - exp_vgk_goals, 2)])
-                        audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "Goals", exp_opp_goals, act_opp_goals, round(act_opp_goals - exp_opp_goals, 2)])
-                        
-                        # Audit SOG
-                        exp_vgk_sog = tr.get('Exp_VGK_SOG', 0)
-                        exp_opp_sog = tr.get('Exp_Opp_SOG', 0)
-                        act_vgk_sog = team_actuals.get('vgk_sog', 0)
-                        act_opp_sog = team_actuals.get('opp_sog', 0)
-                        audit_rows.append([target_game_id, "VGK", "TEAM", "SOG", exp_vgk_sog, act_vgk_sog, round(act_vgk_sog - exp_vgk_sog, 2)])
-                        audit_rows.append([target_game_id, tr.get('opponent', 'OPP'), "TEAM", "SOG", exp_opp_sog, act_opp_sog, round(act_opp_sog - exp_opp_sog, 2)])
-                        
-                        # Backfill Team_Ledger Actuals columns (Columns N through R)
-                        # Headers are 13 columns long, so we update the 5 actual columns at the end
-                        # Column letters: 13=M, so N to R
-                        row_num = idx + 2
-                        went_to_ot = "TRUE" if team_actuals.get('went_to_ot') else "FALSE"
-                        team_updates.append({
-                            'range': f'N{row_num}:R{row_num}',
-                            'values': [[act_vgk_goals, act_vgk_sog, act_opp_goals, act_opp_sog, went_to_ot]]
-                        })
-                
-                if team_updates:
-                    ws_team.batch_update(team_updates)
-                    print(f"Backfilled actuals for {len(team_updates)} Team_Ledger rows.")
-                
-        except Exception as e:
-            print(f"Team ledger audit failed: {e}")
-                
-        if audit_rows:
-            ws_audit.append_rows(values=audit_rows, value_input_option="USER_ENTERED")
-            print(f"Appended {len(audit_rows)} audit rows to Model_Audit.")
-            
-    except Exception as e:
-        print(f"Model audit failed: {e}")
+                all_audit_rows.append([game_id, name, record_type, "Goals Against", exp_ga, act_ga, round(act_ga - exp_ga, 2)])
+
+        # Team Audit: Backfill actuals into Team_Ledger
+        for idx, tr in enumerate(team_records):
+            if str(tr.get('game_id')) != game_id_str:
+                continue
+            act_vgk_goals = team_actuals.get('vgk_goals', 0)
+            act_vgk_sog = team_actuals.get('vgk_sog', 0)
+            act_opp_goals = team_actuals.get('opp_goals', 0)
+            act_opp_sog = team_actuals.get('opp_sog', 0)
+            exp_vgk_goals = tr.get('Exp_VGK_Goals', 0)
+            exp_opp_goals = tr.get('Exp_Opp_Goals', 0)
+            exp_vgk_sog = tr.get('Exp_VGK_SOG', 0)
+            exp_opp_sog = tr.get('Exp_Opp_SOG', 0)
+            all_audit_rows.append([game_id, "VGK", "TEAM", "Goals", exp_vgk_goals, act_vgk_goals, round(act_vgk_goals - exp_vgk_goals, 2)])
+            all_audit_rows.append([game_id, tr.get('opponent', 'OPP'), "TEAM", "Goals", exp_opp_goals, act_opp_goals, round(act_opp_goals - exp_opp_goals, 2)])
+            all_audit_rows.append([game_id, "VGK", "TEAM", "SOG", exp_vgk_sog, act_vgk_sog, round(act_vgk_sog - exp_vgk_sog, 2)])
+            all_audit_rows.append([game_id, tr.get('opponent', 'OPP'), "TEAM", "SOG", exp_opp_sog, act_opp_sog, round(act_opp_sog - exp_opp_sog, 2)])
+            went_to_ot = "TRUE" if team_actuals.get('went_to_ot') else "FALSE"
+            all_team_updates.append({
+                'range': f'N{idx+2}:R{idx+2}',
+                'values': [[act_vgk_goals, act_vgk_sog, act_opp_goals, act_opp_sog, went_to_ot]]
+            })
+
+    # 5. Write all results in batch
+    if all_wager_updates:
+        ws_wagers.batch_update(all_wager_updates)
+        print(f"\nGraded {len(all_wager_updates)} wagers across {len(ungraded_game_ids)} game(s). Final Bankroll: ${current_bankroll:.2f}")
+    else:
+        print("No wager updates to write.")
+
+    if all_team_updates:
+        ws_team.batch_update(all_team_updates)
+        print(f"Backfilled actuals for {len(all_team_updates)} Team_Ledger row(s).")
+
+    if all_audit_rows:
+        ws_audit.append_rows(values=all_audit_rows, value_input_option="USER_ENTERED")
+        print(f"Appended {len(all_audit_rows)} rows to Model_Audit.")
 
 if __name__ == "__main__":
     run_post_mortem()
+

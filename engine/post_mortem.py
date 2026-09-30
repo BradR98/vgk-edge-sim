@@ -82,9 +82,12 @@ def run_post_mortem():
     try:
         ws_wagers = sh.worksheet("Wager_Tracker")
     except Exception:
-        # Create Wager_Tracker if it doesn't exist
+        # Create Wager_Tracker with new schema
         ws_wagers = sh.add_worksheet(title="Wager_Tracker", rows="1000", cols="20")
-        ws_wagers.append_row(["Game_ID", "Player", "Market", "Line", "Odds", "Stake", "Actual", "Grade", "Payout", "Running_Bankroll"])
+        # Row 1: Kelly Criterion controls (checkbox/formulas wired via Apps Script 'Setup Wager Tracker')
+        ws_wagers.update(range_name="A1:E1", values=[["Kelly Criterion Betting:", "FALSE", "Kelly Criterion turned off", "", ""]])
+        # Row 2: Column headers
+        ws_wagers.update(range_name="A2:M2", values=[["Game_ID", "Date", "Venue", "Player/Team", "Market", "Line", "Pick", "Odds", "Stake", "Result", "Grade", "Payout", "Running P&L"]])
         
     try:
         ws_audit = sh.worksheet("Model_Audit")
@@ -173,7 +176,10 @@ def run_post_mortem():
                         ])
             if player_rows:
                 ws_terms.update(range_name=f"A2:E{1 + len(player_rows)}", values=player_rows)
-                print(f"Auto-populated {len(player_rows)} players into Terminology_Ranges.")
+                # Add VGK at the bottom of the Player/Team dropdown column
+                vgk_row = 2 + len(player_rows)
+                ws_terms.update(range_name=f"A{vgk_row}:B{vgk_row}", values=[["VGK", "VGK"]])
+                print(f"Auto-populated {len(player_rows)} players + VGK into Terminology_Ranges.")
         except Exception as e:
             print(f"Failed to auto-populate player rows: {e}")
 
@@ -181,6 +187,45 @@ def run_post_mortem():
         if MARKET_DEFAULTS:
             ws_terms.update(range_name=f"G2:K{1 + len(MARKET_DEFAULTS)}", values=MARKET_DEFAULTS)
             print(f"Populated {len(MARKET_DEFAULTS)} market entries into Terminology_Ranges.")
+
+        # Write NHL Team conversion table (M-N)
+        NHL_TEAMS = [
+            ["Team_Full_Name",         "Abbrev"],
+            ["Anaheim Ducks",          "ANA"],
+            ["Boston Bruins",          "BOS"],
+            ["Buffalo Sabres",         "BUF"],
+            ["Calgary Flames",         "CGY"],
+            ["Carolina Hurricanes",    "CAR"],
+            ["Chicago Blackhawks",     "CHI"],
+            ["Colorado Avalanche",     "COL"],
+            ["Columbus Blue Jackets",  "CBJ"],
+            ["Dallas Stars",           "DAL"],
+            ["Detroit Red Wings",      "DET"],
+            ["Edmonton Oilers",        "EDM"],
+            ["Florida Panthers",       "FLA"],
+            ["Los Angeles Kings",      "LAK"],
+            ["Minnesota Wild",         "MIN"],
+            ["Montr\u00e9al Canadiens","MTL"],
+            ["Nashville Predators",    "NSH"],
+            ["New Jersey Devils",      "NJD"],
+            ["New York Islanders",     "NYI"],
+            ["New York Rangers",       "NYR"],
+            ["Ottawa Senators",        "OTT"],
+            ["Philadelphia Flyers",    "PHI"],
+            ["Pittsburgh Penguins",    "PIT"],
+            ["San Jose Sharks",        "SJS"],
+            ["Seattle Kraken",         "SEA"],
+            ["St. Louis Blues",        "STL"],
+            ["Tampa Bay Lightning",    "TBL"],
+            ["Toronto Maple Leafs",    "TOR"],
+            ["Utah Hockey Club",       "UTA"],
+            ["Vancouver Canucks",      "VAN"],
+            ["Vegas Golden Knights",   "VGK"],
+            ["Washington Capitals",    "WSH"],
+            ["Winnipeg Jets",          "WPG"],
+        ]
+        ws_terms.update(range_name=f"M1:N{len(NHL_TEAMS)}", values=NHL_TEAMS)
+        print(f"Populated NHL team conversion table into Terminology_Ranges.")
 
     # Build player_mapping dict from columns A-E
     all_vals = ws_terms.get_all_values()
@@ -205,23 +250,23 @@ def run_post_mortem():
                 market_mapping[term.strip().lower()] = internal_key
 
     # 2. Find all unique Game_IDs with ungraded wagers in Wager_Tracker
+    # Row 1 = Kelly Criterion controls, Row 2 = headers, Row 3+ = data
     wagers_raw = ws_wagers.get_all_values()
     if len(wagers_raw) < 2:
         print("No wagers found in Wager_Tracker. Exiting.")
         return
 
-    wager_headers = wagers_raw[0]
+    wager_headers = wagers_raw[1] if len(wagers_raw) >= 2 else []  # Row 2
     wager_records = []
-    for row in wagers_raw[1:]:
+    for row in wagers_raw[2:]:  # Data starts at Row 3
         record = {}
         for i, val in enumerate(row):
             if i < len(wager_headers):
                 record[wager_headers[i]] = val
-        wager_records.append(record)
+        if any(v.strip() for v in row):
+            wager_records.append(record)
 
     # Collect unique game IDs that have at least one ungraded wager
-    # Grade column index = 7 (col H, 0-indexed)
-    grade_col_idx = wager_headers.index('Grade') if 'Grade' in wager_headers else 7
     ungraded_game_ids = list(dict.fromkeys(
         str(r.get('Game_ID', '')).strip()
         for r in wager_records
@@ -233,15 +278,6 @@ def run_post_mortem():
         return
 
     print(f"Found {len(ungraded_game_ids)} game(s) with ungraded wagers: {ungraded_game_ids}")
-
-    # 3. Maintain a running bankroll starting from the last graded entry
-    current_bankroll = 1000.00
-    for r in wager_records:
-        if str(r.get('Running_Bankroll', '')).strip():
-            try:
-                current_bankroll = float(r['Running_Bankroll'])
-            except:
-                pass
 
     # Preload sheets needed for audit
     try:
@@ -325,7 +361,7 @@ def run_post_mortem():
             if str(wager.get('Grade', '')).strip():
                 continue  # already graded
 
-            player = str(wager.get('Player', ''))
+            player = str(wager.get('Player/Team', ''))
             market_raw = str(wager.get('Market', '')).strip()
 
             # Resolve market through Terminology_Ranges market map
@@ -334,7 +370,7 @@ def run_post_mortem():
             # Skip markets that aren't player-stat gradeable yet
             gradeable_markets = {'sog', 'goals', 'assists', 'points', 'pim', 'shots against', 'goals against', 'save percentage'}
             if internal_market not in gradeable_markets:
-                print(f"  Row {i+2}: Market '{market_raw}' → '{internal_market}' is not yet auto-gradeable. Skipping.")
+                print(f"  Row {i+3}: Market '{market_raw}' → '{internal_market}' is not yet auto-gradeable. Skipping.")
                 continue
 
             try:
@@ -342,7 +378,7 @@ def run_post_mortem():
                 stake = float(wager.get('Stake', 0) or 0)
                 odds = int(float(wager.get('Odds', -110) or -110))
             except Exception as e:
-                print(f"  Skipping row {i+2} — could not parse Line/Stake/Odds: {dict(wager)} | Error: {e}")
+                print(f"  Skipping row {i+3} — could not parse Line/Stake/Odds: {dict(wager)} | Error: {e}")
                 continue
 
             player_actuals = get_actuals_for_player(actuals, player, player_mapping)
@@ -351,18 +387,18 @@ def run_post_mortem():
             if actual_stat > line:
                 grade = "WIN"
                 profit = calculate_payout(odds, stake)
-                current_bankroll += profit
             elif actual_stat == line:
                 grade = "PUSH"
                 profit = 0
             else:
                 grade = "LOSS"
                 profit = -stake
-                current_bankroll -= stake
 
+            # Row 1=Kelly, Row 2=Headers, data starts Row 3 → enumerate offset = i+3
+            row_num = i + 3
             all_wager_updates.append({
-                'range': f'G{i+2}:J{i+2}',
-                'values': [[actual_stat, grade, round(profit, 2), round(current_bankroll, 2)]]
+                'range': f'J{row_num}:M{row_num}',
+                'values': [[actual_stat, grade, round(profit, 2), f'=SUM($L$3:L{row_num})']]
             })
 
         # Model Audit: Sim_Ledger projections vs actuals
@@ -412,8 +448,8 @@ def run_post_mortem():
 
     # 5. Write all results in batch
     if all_wager_updates:
-        ws_wagers.batch_update(all_wager_updates)
-        print(f"\nGraded {len(all_wager_updates)} wagers across {len(ungraded_game_ids)} game(s). Final Bankroll: ${current_bankroll:.2f}")
+        ws_wagers.batch_update(all_wager_updates, value_input_option='USER_ENTERED')
+        print(f"\nGraded {len(all_wager_updates)} wagers across {len(ungraded_game_ids)} game(s).")
     else:
         print("No wager updates to write.")
 

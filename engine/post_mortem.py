@@ -55,26 +55,16 @@ def parse_boxscore_stats(boxscore):
     
     return actuals, team_actuals
 
-def get_actuals_for_player(actuals_dict, player_str):
-    """Robustly matches user input or simulation full names against the boxscore 'J. Eichel' format."""
+def get_actuals_for_player(actuals_dict, player_str, player_mapping):
+    """Matches user input or simulation full names against the boxscore using the Player_Map tab."""
     # 1. Exact match
     if player_str in actuals_dict:
         return actuals_dict[player_str]
         
-    # 2. Try Boxscore format ("Jack Eichel" -> "J. Eichel")
-    parts = player_str.strip().split()
-    if len(parts) >= 2:
-        box_name = f"{parts[0][0]}. {' '.join(parts[1:])}"
-        if box_name in actuals_dict:
-            return actuals_dict[box_name]
-            
-    # 3. Last Name partial match ("Eichel" or "Jack Eichel" matching "J. Eichel")
-    # Only return if there is exactly 1 match to avoid collisions (e.g. Elias Pettersson)
-    if len(parts) > 0:
-        last_name = parts[-1]
-        matches = [k for k in actuals_dict.keys() if last_name.lower() in k.lower()]
-        if len(matches) == 1:
-            return actuals_dict[matches[0]]
+    # 2. Map lookup
+    mapped_name = player_mapping.get(player_str.lower().strip())
+    if mapped_name and mapped_name in actuals_dict:
+        return actuals_dict[mapped_name]
             
     return {}
 
@@ -101,6 +91,21 @@ def run_post_mortem():
     except Exception:
         ws_audit = sh.add_worksheet(title="Model_Audit", rows="1000", cols="20")
         ws_audit.append_row(["Game_ID", "Player", "Record_Type", "Metric", "Projection", "Actual", "Diff"])
+        
+    # Load Player_Map
+    try:
+        ws_map = sh.worksheet("Player_Map")
+    except Exception:
+        ws_map = sh.add_worksheet(title="Player_Map", rows="500", cols="5")
+        ws_map.append_row(["Boxscore_Name", "Full_Name", "Alias_1", "Alias_2", "Alias_3"])
+        
+    player_mapping = {}
+    for row in ws_map.get_all_values()[1:]:
+        if not row or not row[0]: continue
+        box_name = row[0].strip()
+        for alias in row:
+            if alias.strip():
+                player_mapping[alias.strip().lower()] = box_name
     
     # 2. Find Yesterday's Game ID
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -153,7 +158,7 @@ def run_post_mortem():
             except Exception:
                 continue
             
-            player_actuals = get_actuals_for_player(actuals, player)
+            player_actuals = get_actuals_for_player(actuals, player, player_mapping)
             actual_stat = player_actuals.get(market, 0)
             
             if actual_stat > line:
@@ -224,7 +229,7 @@ def run_post_mortem():
         for proj in game_projections:
             name = proj.get('Name')
             record_type = proj.get('Record_Type')
-            act = get_actuals_for_player(actuals, str(name))
+            act = get_actuals_for_player(actuals, str(name), player_mapping)
             
             if not act:
                 continue

@@ -92,51 +92,118 @@ def run_post_mortem():
         ws_audit = sh.add_worksheet(title="Model_Audit", rows="1000", cols="20")
         ws_audit.append_row(["Game_ID", "Player", "Record_Type", "Metric", "Projection", "Actual", "Diff"])
         
-    # Load Player_Map
+    # Load Terminology_Ranges tab (Player Map + Market Map)
+    MARKET_DEFAULTS = [
+        # Internal_Key             | Display_Name                          | Gradeable
+        ["sog",                    "SKATER Total Shots on Goal",           "", "", ""],
+        ["goals",                  "SKATER Total Goals",                   "", "", ""],
+        ["assists",                "SKATER Total Assists",                  "", "", ""],
+        ["points",                 "SKATER Total Points",                  "", "", ""],
+        ["pim",                    "SKATER PIM",                           "", "", ""],
+        ["moneyline",              "Money Line – OT Included",             "", "", ""],
+        ["handicap",               "Handicap – OT Included",               "", "", ""],
+        ["team_total",             "Total – OT Included",                  "", "", ""],
+        ["team_total_ot",          "Team Total – OT Included",             "", "", ""],
+        ["moneyline_1p",           "Money Line – 1st Period",              "", "", ""],
+        ["handicap_1p",            "Handicap – 1st Period",                "", "", ""],
+        ["total_1p",               "Total – 1st Period",                   "", "", ""],
+        ["team_total_1p",          "Team Total – 1st Period",              "", "", ""],
+        ["moneyline_2p",           "Money Line – 2nd Period",              "", "", ""],
+        ["handicap_2p",            "Handicap – 2nd Period",                "", "", ""],
+        ["total_2p",               "Total – 2nd Period",                   "", "", ""],
+        ["team_total_2p",          "Team Total – 2nd Period",              "", "", ""],
+        ["moneyline_3p",           "Money Line – 3rd Period",              "", "", ""],
+        ["handicap_3p",            "Handicap – 3rd Period",                "", "", ""],
+        ["total_3p",               "Total – 3rd Period",                   "", "", ""],
+        ["team_total_3p",          "Team Total – 3rd Period",              "", "", ""],
+        ["moneyline_reg",          "Money Line – Regulation Time",         "", "", ""],
+        ["handicap_reg",           "Handicap – Regulation Time",           "", "", ""],
+        ["total_reg",              "Total – Regulation Time",              "", "", ""],
+        ["team_total_reg",         "Team Total – Regulation Time",         "", "", ""],
+        ["correct_score",          "Correct Score",                        "", "", ""],
+        ["exact_total_goals",      "Exact Total Goals",                    "", "", ""],
+        ["moneyline_and_total",    "Moneyline and Total Goals",            "", "", ""],
+        ["team_goals",             "TEAM Goals",                           "", "", ""],
+        ["team_win_to_nil",        "TEAM To Win to Nil",                   "", "", ""],
+        ["team_to_score",          "TEAM To Score",                        "", "", ""],
+        ["total_goals_range",      "Total Goals Range",                    "", "", ""],
+    ]
+
     try:
-        ws_map = sh.worksheet("Player_Map")
-        # Check if it needs auto-populating
-        if len(ws_map.get_all_values()) <= 1:
+        ws_terms = sh.worksheet("Terminology_Ranges")
+        all_vals = ws_terms.get_all_values()
+        # Re-populate if empty or only has headers
+        if len(all_vals) <= 1:
             raise Exception("Needs population")
     except Exception:
         try:
-            ws_map = sh.worksheet("Player_Map")
-            ws_map.clear()
+            ws_terms = sh.worksheet("Terminology_Ranges")
+            ws_terms.clear()
         except Exception:
-            ws_map = sh.add_worksheet(title="Player_Map", rows="500", cols="5")
-            
-        ws_map.append_row(["Boxscore_Name", "Full_Name", "Alias_1", "Alias_2", "Alias_3"])
-        
+            # Also try to delete legacy Player_Map tab if it exists
+            try:
+                old = sh.worksheet("Player_Map")
+                sh.del_worksheet(old)
+            except Exception:
+                pass
+            ws_terms = sh.add_worksheet(title="Terminology_Ranges", rows="500", cols="12")
+
+        # Write Player Map section header (A1:E1)
+        ws_terms.update(range_name="A1:E1", values=[["Boxscore_Name", "Full_Name", "Alias_1", "Alias_2", "Alias_3"]])
+
+        # Write Market Map section header (G1:K1)
+        ws_terms.update(range_name="G1:K1", values=[["Internal_Key", "Display_Name", "Sportsbook_Alias_1", "Sportsbook_Alias_2", "Sportsbook_Alias_3"]])
+
+        # Auto-populate Player Map from roster
         try:
-            # Dynamically fetch active roster and build mapping table
             season = "20262027"
             roster = client.teams.team_roster("VGK", season)
-            new_rows = []
+            player_rows = []
             for pos_group in ['forwards', 'defensemen', 'goalies']:
                 for p in roster.get(pos_group, []):
                     f_name = p.get("firstName", {}).get("default", "")
                     l_name = p.get("lastName", {}).get("default", "")
                     if f_name and l_name:
-                        boxscore_name = f"{f_name[0]}. {l_name}"
-                        full_name = f"{f_name} {l_name}"
-                        alias_1 = l_name
-                        alias_2 = f"{f_name[0]}{l_name}"
-                        new_rows.append([boxscore_name, full_name, alias_1, alias_2, ""])
-            
-            if new_rows:
-                ws_map.append_rows(values=new_rows, value_input_option="USER_ENTERED")
-                print("Auto-populated Player_Map with active roster.")
+                        player_rows.append([
+                            f"{f_name[0]}. {l_name}",
+                            f"{f_name} {l_name}",
+                            l_name,
+                            f"{f_name[0]}{l_name}",
+                            ""
+                        ])
+            if player_rows:
+                ws_terms.update(range_name=f"A2:E{1 + len(player_rows)}", values=player_rows)
+                print(f"Auto-populated {len(player_rows)} players into Terminology_Ranges.")
         except Exception as e:
-            print(f"Failed to auto-populate Player_Map: {e}")
-        
+            print(f"Failed to auto-populate player rows: {e}")
+
+        # Write Market Map rows starting at G2
+        if MARKET_DEFAULTS:
+            ws_terms.update(range_name=f"G2:K{1 + len(MARKET_DEFAULTS)}", values=MARKET_DEFAULTS)
+            print(f"Populated {len(MARKET_DEFAULTS)} market entries into Terminology_Ranges.")
+
+    # Build player_mapping dict from columns A-E
+    all_vals = ws_terms.get_all_values()
     player_mapping = {}
-    for row in ws_map.get_all_values()[1:]:
-        if not row or not row[0]: continue
+    for row in all_vals[1:]:
+        if not row or not row[0].strip():
+            continue
         box_name = row[0].strip()
-        for alias in row:
+        for alias in row[:5]:
             if alias.strip():
                 player_mapping[alias.strip().lower()] = box_name
-    
+
+    # Build market_mapping dict from columns G-K
+    # Any alias or display name → internal_key
+    market_mapping = {}
+    for row in all_vals[1:]:
+        if len(row) < 8 or not row[6].strip():
+            continue
+        internal_key = row[6].strip().lower()
+        for term in row[6:11]:
+            if term.strip():
+                market_mapping[term.strip().lower()] = internal_key
+
     # 2. Find all unique Game_IDs with ungraded wagers in Wager_Tracker
     wagers_raw = ws_wagers.get_all_values()
     if len(wagers_raw) < 2:
@@ -259,7 +326,16 @@ def run_post_mortem():
                 continue  # already graded
 
             player = str(wager.get('Player', ''))
-            market = str(wager.get('Market', '')).lower()
+            market_raw = str(wager.get('Market', '')).strip()
+
+            # Resolve market through Terminology_Ranges market map
+            internal_market = market_mapping.get(market_raw.lower(), market_raw.lower())
+
+            # Skip markets that aren't player-stat gradeable yet
+            gradeable_markets = {'sog', 'goals', 'assists', 'points', 'pim', 'shots against', 'goals against', 'save percentage'}
+            if internal_market not in gradeable_markets:
+                print(f"  Row {i+2}: Market '{market_raw}' → '{internal_market}' is not yet auto-gradeable. Skipping.")
+                continue
 
             try:
                 line = float(wager.get('Line', 0) or 0)
@@ -270,7 +346,7 @@ def run_post_mortem():
                 continue
 
             player_actuals = get_actuals_for_player(actuals, player, player_mapping)
-            actual_stat = player_actuals.get(market, 0)
+            actual_stat = player_actuals.get(internal_market, 0)
 
             if actual_stat > line:
                 grade = "WIN"

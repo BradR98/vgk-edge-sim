@@ -140,22 +140,24 @@ def run_post_mortem():
     # 2. Find Most Recent Past Game ID
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
-        schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
+        schedule = client.schedule.team_season_schedule(team_abbr="VGK", season="20262027")
+        games = schedule.get("games", [])
     except Exception as e:
-        print(f"Could not fetch NHL schedule or no games this week: {e}. Exiting gracefully.")
+        print(f"Could not fetch NHL schedule: {e}. Exiting gracefully.")
         return
     
     target_game_id = None
     # Sort games by date descending to find the most recent past game
-    past_games = sorted([g for g in schedule if g.get('gameDate') < today_str], key=lambda x: x.get('gameDate'), reverse=True)
+    past_games = sorted([g for g in games if g.get('gameDate') < today_str], key=lambda x: x.get('gameDate'), reverse=True)
     if past_games:
         target_game_id = past_games[0]['id']
         game_date = past_games[0]['gameDate']
         print(f"Targeting most recent past game: {target_game_id} on {game_date}")
             
     if not target_game_id:
-        print(f"No past VGK games found in current week's schedule. Exiting.")
+        print(f"No past VGK games found. Exiting.")
         return
+
     # 3. Pull Final Boxscore
     try:
         boxscore = client.game_center.boxscore(game_id=target_game_id)

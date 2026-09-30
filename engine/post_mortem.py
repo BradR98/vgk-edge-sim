@@ -16,7 +16,7 @@ def calculate_payout(odds, stake):
 def parse_boxscore_stats(boxscore):
     actuals = {}
     for team_key in ['awayTeam', 'homeTeam']:
-        team_data = boxscore.get(team_key, {})
+        team_data = boxscore.get('playerByGameStats', {}).get(team_key, {})
         for pos_group in ['forwards', 'defense', 'goalies']:
             for player in team_data.get(pos_group, []):
                 name = player.get('name', {}).get('default', 'Unknown')

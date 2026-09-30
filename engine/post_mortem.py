@@ -82,7 +82,11 @@ def run_post_mortem():
     # 2. Find Yesterday's Game ID
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     # For testing/resilience if no game yesterday, you might want to look back a few days or pass manually
-    schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
+    try:
+        schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
+    except Exception as e:
+        print(f"Could not fetch NHL schedule or no games this week: {e}. Exiting gracefully.")
+        return
     
     target_game_id = None
     for game in schedule:

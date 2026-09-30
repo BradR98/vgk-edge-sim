@@ -14,9 +14,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install dependencies
+      - name: Install lightweight dependencies
+        run: pip install nhl-api-py requests
+      - name: Check if game yesterday
+        id: check_game
+        run: |
+          OUTPUT=$(python engine/check_yesterday.py)
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+      - name: Stop if no game
+        if: steps.check_game.outputs.played != 'true'
+        run: echo "No VGK game played yesterday. Skipping heavy dependencies and audit."
+      - name: Install heavy dependencies
+        if: steps.check_game.outputs.played == 'true'
         run: pip install -r requirements.txt
       - name: Run Post Mortem
+        if: steps.check_game.outputs.played == 'true'
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}

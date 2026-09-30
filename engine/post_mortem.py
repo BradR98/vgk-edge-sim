@@ -97,46 +97,48 @@ def run_post_mortem():
         
     # Load Terminology_Ranges tab (Player Map + Market Map)
     MARKET_DEFAULTS = [
-        # Internal_Key             | Display_Name                          | Gradeable
-        ["sog",                    "SKATER Total Shots on Goal",           "", "", ""],
-        ["goals",                  "SKATER Total Goals",                   "", "", ""],
-        ["assists",                "SKATER Total Assists",                  "", "", ""],
-        ["points",                 "SKATER Total Points",                  "", "", ""],
-        ["pim",                    "SKATER PIM",                           "", "", ""],
-        ["moneyline",              "Money Line – OT Included",             "", "", ""],
-        ["handicap",               "Handicap – OT Included",               "", "", ""],
-        ["team_total",             "Total – OT Included",                  "", "", ""],
-        ["team_total_ot",          "Team Total – OT Included",             "", "", ""],
-        ["moneyline_1p",           "Money Line – 1st Period",              "", "", ""],
-        ["handicap_1p",            "Handicap – 1st Period",                "", "", ""],
-        ["total_1p",               "Total – 1st Period",                   "", "", ""],
-        ["team_total_1p",          "Team Total – 1st Period",              "", "", ""],
-        ["moneyline_2p",           "Money Line – 2nd Period",              "", "", ""],
-        ["handicap_2p",            "Handicap – 2nd Period",                "", "", ""],
-        ["total_2p",               "Total – 2nd Period",                   "", "", ""],
-        ["team_total_2p",          "Team Total – 2nd Period",              "", "", ""],
-        ["moneyline_3p",           "Money Line – 3rd Period",              "", "", ""],
-        ["handicap_3p",            "Handicap – 3rd Period",                "", "", ""],
-        ["total_3p",               "Total – 3rd Period",                   "", "", ""],
-        ["team_total_3p",          "Team Total – 3rd Period",              "", "", ""],
-        ["moneyline_reg",          "Money Line – Regulation Time",         "", "", ""],
-        ["handicap_reg",           "Handicap – Regulation Time",           "", "", ""],
-        ["total_reg",              "Total – Regulation Time",              "", "", ""],
-        ["team_total_reg",         "Team Total – Regulation Time",         "", "", ""],
-        ["correct_score",          "Correct Score",                        "", "", ""],
-        ["exact_total_goals",      "Exact Total Goals",                    "", "", ""],
-        ["moneyline_and_total",    "Moneyline and Total Goals",            "", "", ""],
-        ["team_goals",             "TEAM Goals",                           "", "", ""],
-        ["team_win_to_nil",        "TEAM To Win to Nil",                   "", "", ""],
-        ["team_to_score",          "TEAM To Score",                        "", "", ""],
-        ["total_goals_range",      "Total Goals Range",                    "", "", ""],
+        # Internal_Key          | Display_Name                    | Sportsbook_Alias_1          | Sportsbook_Alias_2      | Sportsbook_Alias_3
+        ["sog",                 "SKATER Total Shots on Goal",    "Total Shots on Goal",        "Shots on Goal",          "Player SOG"],
+        ["goals",               "SKATER Total Goals",            "Total Goals",                "Player Goals",           "Anytime Goal"],
+        ["assists",             "SKATER Total Assists",          "Total Assists",              "Player Assists",         ""],
+        ["points",              "SKATER Total Points",           "Total Points",               "Player Points",          ""],
+        ["pim",                 "SKATER PIM",                   "Penalty Minutes",            "Player PIM",             ""],
+        ["moneyline",           "Money Line – OT Included",     "Moneyline",                  "ML",                     ""],
+        ["handicap",            "Handicap – OT Included",       "Puck Line",                  "Spread",                 ""],
+        ["team_total",          "Total – OT Included",          "Game Total",                 "Over/Under",             "O/U"],
+        ["team_total_ot",       "Team Total – OT Included",     "Team Total",                 "",                       ""],
+        ["moneyline_1p",        "Money Line – 1st Period",      "1st Period ML",              "",                       ""],
+        ["handicap_1p",         "Handicap – 1st Period",        "1st Period Puck Line",       "",                       ""],
+        ["total_1p",            "Total – 1st Period",           "1st Period Total",           "1P O/U",                 ""],
+        ["team_total_1p",       "Team Total – 1st Period",      "1st Period Team Total",      "",                       ""],
+        ["moneyline_2p",        "Money Line – 2nd Period",      "2nd Period ML",              "",                       ""],
+        ["handicap_2p",         "Handicap – 2nd Period",        "2nd Period Puck Line",       "",                       ""],
+        ["total_2p",            "Total – 2nd Period",           "2nd Period Total",           "2P O/U",                 ""],
+        ["team_total_2p",       "Team Total – 2nd Period",      "2nd Period Team Total",      "",                       ""],
+        ["moneyline_3p",        "Money Line – 3rd Period",      "3rd Period ML",              "",                       ""],
+        ["handicap_3p",         "Handicap – 3rd Period",        "3rd Period Puck Line",       "",                       ""],
+        ["total_3p",            "Total – 3rd Period",           "3rd Period Total",           "3P O/U",                 ""],
+        ["team_total_3p",       "Team Total – 3rd Period",      "3rd Period Team Total",      "",                       ""],
+        ["moneyline_reg",       "Money Line – Regulation Time", "Regulation ML",              "",                       ""],
+        ["handicap_reg",        "Handicap – Regulation Time",   "Regulation Puck Line",       "",                       ""],
+        ["total_reg",           "Total – Regulation Time",      "Regulation Total",           "",                       ""],
+        ["team_total_reg",      "Team Total – Regulation Time", "Regulation Team Total",      "",                       ""],
+        ["correct_score",       "Correct Score",                "",                           "",                       ""],
+        ["exact_total_goals",   "Exact Total Goals",            "",                           "",                       ""],
+        ["moneyline_and_total", "Moneyline and Total Goals",    "",                           "",                       ""],
+        ["team_goals",          "TEAM Goals",                   "",                           "",                       ""],
+        ["team_win_to_nil",     "TEAM To Win to Nil",           "Win to Nil",                 "",                       ""],
+        ["team_to_score",       "TEAM To Score",                "To Score",                   "",                       ""],
+        ["total_goals_range",   "Total Goals Range",            "",                           "",                       ""],
     ]
 
     try:
         ws_terms = sh.worksheet("Terminology_Ranges")
         all_vals = ws_terms.get_all_values()
-        # Re-populate if empty or only has headers
-        if len(all_vals) <= 1:
+        # Re-populate if: empty, only headers, or market alias columns are still blank (old format)
+        market_rows = [r for r in all_vals[1:] if len(r) > 6 and r[6].strip()]
+        aliases_populated = any(len(r) > 8 and r[8].strip() for r in market_rows)
+        if len(all_vals) <= 1 or not aliases_populated:
             raise Exception("Needs population")
     except Exception:
         try:
@@ -149,7 +151,7 @@ def run_post_mortem():
                 sh.del_worksheet(old)
             except Exception:
                 pass
-            ws_terms = sh.add_worksheet(title="Terminology_Ranges", rows="500", cols="12")
+            ws_terms = sh.add_worksheet(title="Terminology_Ranges", rows="500", cols="16")
 
         # Write Player Map section header (A1:E1)
         ws_terms.update(range_name="A1:E1", values=[["Boxscore_Name", "Full_Name", "Alias_1", "Alias_2", "Alias_3"]])

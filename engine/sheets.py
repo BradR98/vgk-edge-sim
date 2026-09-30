@@ -37,6 +37,8 @@ def update_game_day_tab(sh, df_lines, df_goalies, df_skaters, metadata):
     # Combine everything with padding
     full_data = [
         [f"Game: VGK vs {metadata.get('opponent')} ({metadata.get('venue')})", f"Date: {metadata.get('game_date')}", f"Puck Drop: {metadata.get('start_time', 'N/A')}"],
+        ["Game ID:", metadata.get('game_id', 'N/A')],
+        [],
         lines_header
     ] + lines_data + [
         [], # Empty separator before goalie block
@@ -48,8 +50,8 @@ def update_game_day_tab(sh, df_lines, df_goalies, df_skaters, metadata):
     
     ws_live.update(range_name="A1", values=full_data)
     
-    # Freeze the top 3 rows (Metadata + Game Lines)
-    ws_live.freeze(rows=3)
+    # Freeze the top 4 rows (Metadata + Game ID + spacer + Game Lines header)
+    ws_live.freeze(rows=4)
     
     # 3. Conditional Formatting for Top 3
     target_cols = ["PIM_Over_1.5_%", "Exp_SOG", "SOG_P80", "Anytime_Goal_%", "Exp_Assists", "Over_0.5_Pt_%"]

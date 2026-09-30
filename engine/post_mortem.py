@@ -262,10 +262,11 @@ def run_post_mortem():
             market = str(wager.get('Market', '')).lower()
 
             try:
-                line = float(wager.get('Line', 0))
-                stake = float(wager.get('Stake', 0))
-                odds = int(wager.get('Odds', -110))
-            except Exception:
+                line = float(wager.get('Line', 0) or 0)
+                stake = float(wager.get('Stake', 0) or 0)
+                odds = int(float(wager.get('Odds', -110) or -110))
+            except Exception as e:
+                print(f"  Skipping row {i+2} — could not parse Line/Stake/Odds: {dict(wager)} | Error: {e}")
                 continue
 
             player_actuals = get_actuals_for_player(actuals, player, player_mapping)

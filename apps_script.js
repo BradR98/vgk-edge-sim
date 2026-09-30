@@ -12,8 +12,8 @@
 const GITHUB_OWNER = "BradR98"; // Your GitHub username
 const GITHUB_REPO = "vgk-edge-sim"; // Your repository name
 const WORKFLOW_ID = "Auto_2_Sim.yml"; // The workflow file to trigger
-// You must generate a Fine-grained PAT on GitHub with 'Actions: Read & Write' permission
-const GITHUB_PAT = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_HERE";
+// Pull the token securely from Apps Script Settings -> Script Properties
+const GITHUB_PAT = PropertiesService.getScriptProperties().getProperty('NHL Team X Team Edge');
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -25,8 +25,8 @@ function onOpen() {
 function triggerGitHubAction() {
   const ui = SpreadsheetApp.getUi();
   
-  if (GITHUB_PAT === "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_HERE") {
-    ui.alert("Configuration Error", "You must replace 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_HERE' with your actual GitHub token in the Apps Script editor.", ui.ButtonSet.OK);
+  if (!GITHUB_PAT) {
+    ui.alert("Configuration Error", "Could not find the GitHub Token. Ensure you have added it to Project Settings -> Script Properties with the property 'NHL Team X Team Edge'.", ui.ButtonSet.OK);
     return;
   }
 

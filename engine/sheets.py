@@ -104,6 +104,14 @@ def append_team_ledger(sh, df_lines, metadata):
         headers = ["game_id", "game_date", "opponent", "venue", "sim_timestamp_utc"] + df_lines.columns.values.tolist() + ["Actual_VGK_Goals", "Actual_VGK_SOG", "Actual_Opp_Goals", "Actual_Opp_SOG", "Went_To_OT"]
         ws_ledger.update(range_name="A1", values=[headers])
         
+    # Deduplicate: Remove any existing rows for this game_id from bottom to top
+    game_id_str = str(metadata.get("game_id", ""))
+    if game_id_str:
+        col_a = ws_ledger.col_values(1)
+        matching_indices = [i + 1 for i, val in enumerate(col_a) if str(val) == game_id_str]
+        for idx in sorted(matching_indices, reverse=True):
+            ws_ledger.delete_rows(idx)
+        
     ledger_lines = df_lines.copy()
     
     # Insert Metadata at the very front
@@ -126,6 +134,14 @@ def append_sim_ledger(sh, df_goalies, df_skaters, metadata):
     """Appends to the historical database tab, flagging Record_Type."""
     ws_ledger = sh.worksheet("Sim_Ledger")
     
+    # Deduplicate: Remove any existing rows for this game_id from bottom to top
+    game_id_str = str(metadata.get("game_id", ""))
+    if game_id_str:
+        col_a = ws_ledger.col_values(1)
+        matching_indices = [i + 1 for i, val in enumerate(col_a) if str(val) == game_id_str]
+        for idx in sorted(matching_indices, reverse=True):
+            ws_ledger.delete_rows(idx)
+            
     # Process Skaters
     ledger_skaters = df_skaters.copy()
     ledger_skaters.insert(0, "Record_Type", "SKATER")

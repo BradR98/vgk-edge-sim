@@ -160,7 +160,34 @@ def run_post_mortem():
     # 5. Run the Model Audit
     try:
         ws_ledger = sh.worksheet("Sim_Ledger")
-        ledger_records = ws_ledger.get_all_records()
+        raw_data = ws_ledger.get_all_values()
+        
+        if len(raw_data) < 2:
+            print("No sim ledger records found for this game. Skipping audit.")
+            return
+            
+        headers = raw_data[0]
+        # Deduplicate and clean headers
+        clean_headers = []
+        for i, h in enumerate(headers):
+            if not h or h == "":
+                clean_headers.append(f"BLANK_{i}")
+            elif h in clean_headers:
+                clean_headers.append(f"{h}_{i}")
+            else:
+                clean_headers.append(h)
+                
+        ledger_records = []
+        for row in raw_data[1:]:
+            record = {}
+            for i, val in enumerate(row):
+                if i < len(clean_headers):
+                    try:
+                        # Convert numeric strings to floats if possible, just like get_all_records does
+                        record[clean_headers[i]] = float(val) if '.' in val else int(val)
+                    except ValueError:
+                        record[clean_headers[i]] = val
+            ledger_records.append(record)
         
         # Filter ledger for yesterday's game
         game_projections = [r for r in ledger_records if str(r.get('game_id')) == str(target_game_id)]
@@ -203,11 +230,34 @@ def run_post_mortem():
         # 5b. Audit Team Lines (VGK and Opponent)
         try:
             ws_team = sh.worksheet("Team_Ledger")
-            team_records = ws_team.get_all_records()
-            # We want the row index for batch_update (1-indexed, +1 for header = enumerate + 2)
+            team_raw_data = ws_team.get_all_values()
+            
             team_updates = []
             
-            for idx, tr in enumerate(team_records):
+            if len(team_raw_data) >= 2:
+                team_headers = team_raw_data[0]
+                team_clean_headers = []
+                for i, h in enumerate(team_headers):
+                    if not h or h == "":
+                        team_clean_headers.append(f"BLANK_{i}")
+                    elif h in team_clean_headers:
+                        team_clean_headers.append(f"{h}_{i}")
+                    else:
+                        team_clean_headers.append(h)
+                
+                team_records = []
+                for row in team_raw_data[1:]:
+                    record = {}
+                    for i, val in enumerate(row):
+                        if i < len(team_clean_headers):
+                            try:
+                                record[team_clean_headers[i]] = float(val) if '.' in val else int(val)
+                            except ValueError:
+                                record[team_clean_headers[i]] = val
+                    team_records.append(record)
+                    
+                # We want the row index for batch_update (1-indexed, +1 for header = enumerate + 2)
+                for idx, tr in enumerate(team_records):
                 if str(tr.get('game_id')) == str(target_game_id):
                     # Audit Goals
                     exp_vgk_goals = tr.get('Exp_VGK_Goals', 0)

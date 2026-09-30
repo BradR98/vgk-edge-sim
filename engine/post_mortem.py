@@ -95,9 +95,39 @@ def run_post_mortem():
     # Load Player_Map
     try:
         ws_map = sh.worksheet("Player_Map")
+        # Check if it needs auto-populating
+        if len(ws_map.get_all_values()) <= 1:
+            raise Exception("Needs population")
     except Exception:
-        ws_map = sh.add_worksheet(title="Player_Map", rows="500", cols="5")
+        try:
+            ws_map = sh.worksheet("Player_Map")
+            ws_map.clear()
+        except Exception:
+            ws_map = sh.add_worksheet(title="Player_Map", rows="500", cols="5")
+            
         ws_map.append_row(["Boxscore_Name", "Full_Name", "Alias_1", "Alias_2", "Alias_3"])
+        
+        try:
+            # Dynamically fetch active roster and build mapping table
+            season = "20262027"
+            roster = client.teams.team_roster("VGK", season)
+            new_rows = []
+            for pos_group in ['forwards', 'defensemen', 'goalies']:
+                for p in roster.get(pos_group, []):
+                    f_name = p.get("firstName", {}).get("default", "")
+                    l_name = p.get("lastName", {}).get("default", "")
+                    if f_name and l_name:
+                        boxscore_name = f"{f_name[0]}. {l_name}"
+                        full_name = f"{f_name} {l_name}"
+                        alias_1 = l_name
+                        alias_2 = f"{f_name[0]}{l_name}"
+                        new_rows.append([boxscore_name, full_name, alias_1, alias_2, ""])
+            
+            if new_rows:
+                ws_map.append_rows(values=new_rows, value_input_option="USER_ENTERED")
+                print("Auto-populated Player_Map with active roster.")
+        except Exception as e:
+            print(f"Failed to auto-populate Player_Map: {e}")
         
     player_mapping = {}
     for row in ws_map.get_all_values()[1:]:

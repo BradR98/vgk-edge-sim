@@ -137,9 +137,8 @@ def run_post_mortem():
             if alias.strip():
                 player_mapping[alias.strip().lower()] = box_name
     
-    # 2. Find Yesterday's Game ID
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    # For testing/resilience if no game yesterday, you might want to look back a few days or pass manually
+    # 2. Find Most Recent Past Game ID
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
         schedule = client.schedule.team_weekly_schedule(team_abbr="VGK")
     except Exception as e:
@@ -147,15 +146,16 @@ def run_post_mortem():
         return
     
     target_game_id = None
-    for game in schedule:
-        if game.get('gameDate') == yesterday:
-            target_game_id = game['id']
-            break
+    # Sort games by date descending to find the most recent past game
+    past_games = sorted([g for g in schedule if g.get('gameDate') < today_str], key=lambda x: x.get('gameDate'), reverse=True)
+    if past_games:
+        target_game_id = past_games[0]['id']
+        game_date = past_games[0]['gameDate']
+        print(f"Targeting most recent past game: {target_game_id} on {game_date}")
             
     if not target_game_id:
-        print(f"No VGK game played on {yesterday}. Exiting.")
+        print(f"No past VGK games found in current week's schedule. Exiting.")
         return
-
     # 3. Pull Final Boxscore
     try:
         boxscore = client.game_center.boxscore(game_id=target_game_id)

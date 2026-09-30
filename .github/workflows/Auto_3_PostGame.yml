@@ -22,13 +22,13 @@ jobs:
           OUTPUT=$(python engine/check_yesterday.py)
           echo "$OUTPUT" >> $GITHUB_OUTPUT
       - name: Stop if no game
-        if: steps.check_game.outputs.played != 'true'
+        if: steps.check_game.outputs.played != 'true' && github.event_name != 'workflow_dispatch'
         run: echo "No VGK game played yesterday. Skipping heavy dependencies and audit."
       - name: Install heavy dependencies
-        if: steps.check_game.outputs.played == 'true'
+        if: steps.check_game.outputs.played == 'true' || github.event_name == 'workflow_dispatch'
         run: pip install -r requirements.txt
       - name: Run Post Mortem
-        if: steps.check_game.outputs.played == 'true'
+        if: steps.check_game.outputs.played == 'true' || github.event_name == 'workflow_dispatch'
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}

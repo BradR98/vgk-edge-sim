@@ -56,12 +56,12 @@ def check_and_trigger():
         else:
             print("Morning Scout: No game within 24 hours.")
     else:
-        # Execution Window: 15 < minutes <= 30 guarantees exactly one trigger for a 15-min cron
-        if 15 < minutes_to_drop <= 30:
-            print("Pregame Scout: Within execution window. Triggering simulation...")
+        # Execution Window: 105 < minutes <= 120 guarantees exactly one trigger for a 15-min cron
+        if 105 < minutes_to_drop <= 120:
+            print("Pregame Scout: Within 120-minute execution window. Triggering simulation...")
             trigger_simulation()
         else:
-            print("Pregame Scout: Outside execution window. Exiting silently.")
+            print("Pregame Scout: Outside 120-minute execution window. Exiting silently.")
 
 def trigger_simulation():
     gh_token = os.environ.get("GH_TOKEN")

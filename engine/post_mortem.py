@@ -55,6 +55,29 @@ def parse_boxscore_stats(boxscore):
     
     return actuals, team_actuals
 
+def get_actuals_for_player(actuals_dict, player_str):
+    """Robustly matches user input or simulation full names against the boxscore 'J. Eichel' format."""
+    # 1. Exact match
+    if player_str in actuals_dict:
+        return actuals_dict[player_str]
+        
+    # 2. Try Boxscore format ("Jack Eichel" -> "J. Eichel")
+    parts = player_str.strip().split()
+    if len(parts) >= 2:
+        box_name = f"{parts[0][0]}. {' '.join(parts[1:])}"
+        if box_name in actuals_dict:
+            return actuals_dict[box_name]
+            
+    # 3. Last Name partial match ("Eichel" or "Jack Eichel" matching "J. Eichel")
+    # Only return if there is exactly 1 match to avoid collisions (e.g. Elias Pettersson)
+    if len(parts) > 0:
+        last_name = parts[-1]
+        matches = [k for k in actuals_dict.keys() if last_name.lower() in k.lower()]
+        if len(matches) == 1:
+            return actuals_dict[matches[0]]
+            
+    return {}
+
 def run_post_mortem():
     # 1. Init API and Sheets
     client = NHLClient()
@@ -130,7 +153,8 @@ def run_post_mortem():
             except Exception:
                 continue
             
-            actual_stat = actuals.get(player, {}).get(market, 0)
+            player_actuals = get_actuals_for_player(actuals, player)
+            actual_stat = player_actuals.get(market, 0)
             
             if actual_stat > line:
                 grade = "WIN"
@@ -200,7 +224,7 @@ def run_post_mortem():
         for proj in game_projections:
             name = proj.get('Name')
             record_type = proj.get('Record_Type')
-            act = actuals.get(name)
+            act = get_actuals_for_player(actuals, str(name))
             
             if not act:
                 continue

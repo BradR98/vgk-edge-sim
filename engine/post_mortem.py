@@ -144,6 +144,7 @@ def run_post_mortem():
         try:
             ws_terms = sh.worksheet("Terminology_Ranges")
             ws_terms.clear()
+            ws_terms.resize(rows=500, cols=16)  # ensure M-N columns exist for team table
         except Exception:
             # Also try to delete legacy Player_Map tab if it exists
             try:

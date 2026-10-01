@@ -42,17 +42,21 @@ def parse_boxscore_stats(boxscore):
     away_sog = boxscore.get('awayTeam', {}).get('sog', 0)
     home_score = boxscore.get('homeTeam', {}).get('score', 0)
     home_sog = boxscore.get('homeTeam', {}).get('sog', 0)
-    
+
     is_vgk_home = boxscore.get('homeTeam', {}).get('abbrev') == 'VGK'
-    
+    game_date = boxscore.get('gameDate', '')
+    venue = 'Home' if is_vgk_home else 'Away'
+
     team_actuals = {
         'vgk_goals': home_score if is_vgk_home else away_score,
         'vgk_sog': home_sog if is_vgk_home else away_sog,
         'opp_goals': away_score if is_vgk_home else home_score,
         'opp_sog': away_sog if is_vgk_home else home_sog,
-        'went_to_ot': boxscore.get('gameOutcome', {}).get('lastPeriodType') in ['OT', 'SO']
+        'went_to_ot': boxscore.get('gameOutcome', {}).get('lastPeriodType') in ['OT', 'SO'],
+        'game_date': game_date,
+        'venue': venue
     }
-    
+
     return actuals, team_actuals
 
 def get_actuals_for_player(actuals_dict, player_str, player_mapping):
@@ -399,6 +403,10 @@ def run_post_mortem():
 
             # Row 1=Kelly, Row 2=Headers, data starts Row 3 → enumerate offset = i+3
             row_num = i + 3
+            all_wager_updates.append({
+                'range': f'B{row_num}:C{row_num}',
+                'values': [[team_actuals.get('game_date', ''), team_actuals.get('venue', '')]]
+            })
             all_wager_updates.append({
                 'range': f'J{row_num}:M{row_num}',
                 'values': [[actual_stat, grade, round(profit, 2), f'=SUM($L$3:L{row_num})']]

@@ -2,6 +2,18 @@ import numpy as np
 import pandas as pd
 from nhlpy import NHLClient
 
+def prob_to_american(p, rounding=5):
+    """Convert a win probability (0-1) to American moneyline odds, rounded to nearest 5."""
+    if p <= 0.0 or p >= 1.0:
+        return ""
+    if p >= 0.5:
+        raw = -100.0 * p / (1.0 - p)
+    else:
+        raw = 100.0 * (1.0 - p) / p
+    val = int(round(raw / rounding) * rounding)
+    # Clamp to sportsbook-realistic range
+    return max(-5000, min(5000, val))
+
 def get_upcoming_opponent(team_abbr="VGK", manual_opponent=None):
     if manual_opponent:
         return manual_opponent
@@ -185,27 +197,51 @@ def run_full_handicap_simulation(
     # Aggregate Skater Summary
     skater_summary = []
     for i, row in skaters_df.iterrows():
-        sog_arr = sim_sog[i]
+        sog_arr  = sim_sog[i]
         goal_arr = sim_goals[i]
-        ast_arr = sim_assists[i]
-        toi_arr = sim_toi[i]
-        pim_arr = sim_pim[i]
-        xg_arr = sim_xg[i]
-        
+        ast_arr  = sim_assists[i]
+        toi_arr  = sim_toi[i]
+        pim_arr  = sim_pim[i]
+        xg_arr   = sim_xg[i]
+        pt_arr   = goal_arr + ast_arr
+
+        # Raw probabilities for each threshold
+        p_sog_05 = float(np.mean(sog_arr  >= 1))
+        p_sog_15 = float(np.mean(sog_arr  >= 2))
+        p_sog_25 = float(np.mean(sog_arr  >= 3))
+        p_sog_35 = float(np.mean(sog_arr  >= 4))
+        p_goal   = float(np.mean(goal_arr >= 1))
+        p_ast_05 = float(np.mean(ast_arr  >= 1))
+        p_pt_05  = float(np.mean(pt_arr   >= 1))
+        p_pt_15  = float(np.mean(pt_arr   >= 2))
+        p_pt_25  = float(np.mean(pt_arr   >= 3))
+        p_pt_35  = float(np.mean(pt_arr   >= 4))
+
         skater_summary.append({
-            "Name": row['Name'],
-            "Pos": row.get('Position', 'F'),
-            "Exp_TOI": round(float(np.mean(toi_arr)), 2),
-            "Exp_PIM": round(float(np.mean(pim_arr)), 2),
-            "PIM_Over_1.5_%": round(float(np.mean(pim_arr >= 2)) * 100, 1),
-            "Exp_SOG": round(float(np.mean(sog_arr)), 2),
-            "SOG_P50": round(float(np.percentile(sog_arr, 50)), 1),
-            "SOG_P80": round(float(np.percentile(sog_arr, 80)), 1),
-            "Exp_xG": round(float(np.mean(xg_arr)), 3),
-            "Exp_Goals": round(float(np.mean(goal_arr)), 2),
-            "Anytime_Goal_%": round(float(np.mean(goal_arr >= 1)) * 100, 1),
-            "Exp_Assists": round(float(np.mean(ast_arr)), 2),
-            "Over_0.5_Pt_%": round(float(np.mean((goal_arr + ast_arr) >= 1)) * 100, 1)
+            "Name":              row['Name'],
+            "Pos":               row.get('Position', 'F'),
+            "Exp_TOI":           round(float(np.mean(toi_arr)), 2),
+            "Exp_PIM":           round(float(np.mean(pim_arr)), 2),
+            "PIM_Over_1.5_%":    round(float(np.mean(pim_arr >= 2)) * 100, 1),
+            # --- SOG ---
+            "Exp_SOG":           round(float(np.mean(sog_arr)), 2),
+            "SOG_O_0.5":         prob_to_american(p_sog_05),
+            "SOG_O_1.5":         prob_to_american(p_sog_15),
+            "SOG_O_2.5":         prob_to_american(p_sog_25),
+            "SOG_O_3.5":         prob_to_american(p_sog_35),
+            # --- Goals ---
+            "Exp_xG":            round(float(np.mean(xg_arr)), 3),
+            "Exp_Goals":         round(float(np.mean(goal_arr)), 2),
+            "Goal_Line":         prob_to_american(p_goal),
+            # --- Assists ---
+            "Exp_Assist":        round(float(np.mean(ast_arr)), 2),
+            "Asst_Line_O_0.5":   prob_to_american(p_ast_05),
+            # --- Points ---
+            "Exp_Points":        round(float(np.mean(pt_arr)), 2),
+            "Points_O_0.5":      prob_to_american(p_pt_05),
+            "Points_O_1.5":      prob_to_american(p_pt_15),
+            "Points_O_2.5":      prob_to_american(p_pt_25),
+            "Points_O_3.5":      prob_to_american(p_pt_35),
         })
     df_skaters_summary = pd.DataFrame(skater_summary)
 

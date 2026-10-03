@@ -23,13 +23,14 @@ function onOpen() {
 
   ui.createMenu('VGK EDGE')
     .addItem('Run Manual Update',   'triggerSim')
-    .addItem('Grade Wagers',        'triggerGradeWagers')
     .addItem('Update Wager Search', 'updateWagerSearch')
     .addSeparator()
     .addItem('Setup Wager Tracker', 'setupWagerTracker')
     .addToUi();
 
   ui.createMenu('MY BETS')
+    .addItem('Grade Wagers',      'triggerGradeWagers')
+    .addSeparator()
     .addItem('Print Open Wagers', 'printOpenWagers')
     .addToUi();
 }

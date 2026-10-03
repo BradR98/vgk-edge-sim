@@ -53,7 +53,7 @@ def update_game_day_tab(sh, df_lines, df_goalies, df_skaters, metadata):
     ws_live.freeze(rows=3)
     
     # 3. Conditional Formatting for Top 3
-    target_cols = ["Exp_SOG", "SOG_O_2.5", "Exp_Goals", "Goal_Line", "Exp_Assist", "Exp_Points", "Points_O_0.5"]
+    target_cols = ["Exp_SOG", "SOG_O_2.5", "Exp_Goals", "Goals_O_0.5", "Exp_Assist", "Exp_Points", "Points_O_0.5"]
     
     def col_num_to_letter(n):
         string = ""

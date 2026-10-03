@@ -232,7 +232,8 @@ def run_full_handicap_simulation(
             # --- Goals ---
             "Exp_xG":            round(float(np.mean(xg_arr)), 3),
             "Exp_Goals":         round(float(np.mean(goal_arr)), 2),
-            "Goal_Line":         prob_to_american(p_goal),
+            "Goals_O_0.5":       prob_to_american(p_goal),
+            "Goals_U_0.5":       prob_to_american(1.0 - p_goal),
             # --- Assists ---
             "Exp_Assist":        round(float(np.mean(ast_arr)), 2),
             "Asst_Line_O_0.5":   prob_to_american(p_ast_05),

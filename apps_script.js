@@ -30,8 +30,7 @@ function onOpen() {
     .addToUi();
 
   ui.createMenu('MY BETS')
-    .addItem('Print Open Wagers',   'printOpenWagers')
-    .addItem('Print Winners 🏆', 'printWinners')
+    .addItem('Print Open Wagers', 'printOpenWagers')
     .addToUi();
 }
 
@@ -50,7 +49,7 @@ function _triggerWorkflow(workflowId, successMsg) {
   const ui = SpreadsheetApp.getUi();
   if (!GITHUB_PAT) {
     ui.alert('Configuration Error',
-      "GitHub Token not found. Add it to Project Settings → Script Properties with key 'NHL Team X Team Edge'.",
+      "GitHub Token not found. Add it to Project Settings \u2192 Script Properties with key 'NHL Team X Team Edge'.",
       ui.ButtonSet.OK);
     return;
   }
@@ -146,7 +145,6 @@ function updateWagerSearch() {
 
   if (!wt) { ui.alert('Error', 'Wager_Tracker tab not found.', ui.ButtonSet.OK); return; }
 
-  // Find or rename existing Wager Search tab
   let ws = ss.getSheetByName('Wager Search');
   if (!ws) {
     const oldNames = ['Wager_Search', 'WagerSearch'];
@@ -231,8 +229,8 @@ function printOpenWagers() {
       market   : idx['Market']      >= 0 ? String(row[idx['Market']])      : '',
       pick     : idx['Pick']        >= 0 ? String(row[idx['Pick']])        : '',
       line     : idx['Line']        >= 0 ? String(row[idx['Line']])        : '',
-      odds     : odds,
-      stake    : stake,
+      odds,
+      stake,
       potPayout: potPayout.toFixed(2)
     };
   }));
@@ -242,7 +240,7 @@ function printOpenWagers() {
 <head>
 <meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   @page { size: letter portrait; margin: 0.35in; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -266,11 +264,10 @@ function printOpenWagers() {
     print-color-adjust: exact;
   }
   .logo {
-    font-size: 16px;
-    font-weight: 900;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
     color: #B4975A;
-    letter-spacing: 3px;
-    text-transform: uppercase;
+    letter-spacing: 4px;
   }
   .meta {
     font-size: 9px;
@@ -281,7 +278,7 @@ function printOpenWagers() {
   }
   .meta strong { color: #333; }
 
-  /* ── 3-column grid: 2 rows × 3 cols = 6 per page ── */
+  /* ── 3-column grid: 2 rows x 3 cols = 6 per page ── */
   .grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -305,7 +302,7 @@ function printOpenWagers() {
     print-color-adjust: exact;
   }
 
-  /* Player + market header */
+  /* Player + market */
   .t-head {
     background: #faf7f0;
     border-left: 4px solid #B4975A;
@@ -318,7 +315,6 @@ function printOpenWagers() {
     font-weight: 900;
     color: #111;
     text-transform: uppercase;
-    letter-spacing: 0.2px;
     line-height: 1.2;
   }
   .t-head .market {
@@ -343,21 +339,15 @@ function printOpenWagers() {
     border-bottom: 1px solid #f2f2f2;
   }
   .row:last-child { border-bottom: none; }
-  .lbl {
-    font-size: 7.5px;
-    color: #bbb;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 700;
-  }
-  .val        { font-size: 11px; font-weight: 700; color: #222; }
-  .val.pick   { font-size: 12px; color: #111; font-weight: 900; }
-  .val.odds   { color: #8a6820; font-size: 12px; font-weight: 900; }
+  .lbl { font-size: 7.5px; color: #bbb; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+  .val       { font-size: 11px; font-weight: 700; color: #222; }
+  .val.pick  { font-size: 12px; color: #111; font-weight: 900; }
+  .val.odds  { color: #8a6820; font-size: 12px; font-weight: 900; }
 
   /* Stake / To Win footer */
   .t-foot {
     background: #f7f4ec;
-    padding: 5px 9px 6px;
+    padding: 5px 9px 5px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -371,12 +361,61 @@ function printOpenWagers() {
   .payout-lbl { font-size: 7.5px; color: #bbb; text-transform: uppercase; letter-spacing: 1px; text-align: right; }
   .payout-val { font-size: 15px; font-weight: 900; color: #1a6e35; text-align: right; }
 
-  /* Game ID footer chip */
+  /* ── RESULT marking section ── */
+  .result-bar {
+    border-top: 1px dashed #d4c9a8;
+    margin: 0 9px;
+    padding: 6px 0 7px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .result-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    color: #B4975A;
+    letter-spacing: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  /* Three circle buttons: W / L / P */
+  .result-options {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .opt {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  .opt.w { border: 1.5px solid #1a6e35; color: #1a6e35; }
+  .opt.l { border: 1.5px solid #c0392b; color: #c0392b; }
+  .opt.p { border: 1.5px solid #888;    color: #888; }
+
+  /* Long blank line for writing the actual stat result */
+  .result-line {
+    flex: 1;
+    border-bottom: 1px solid #ccc;
+    height: 16px;
+    min-width: 30px;
+  }
+
+  /* Game chip */
   .chip {
     font-size: 7px;
     color: #ccc;
     letter-spacing: 0.5px;
-    padding: 3px 9px 5px;
+    padding: 2px 9px 5px;
   }
 
   /* Print button */
@@ -454,6 +493,15 @@ wagers.forEach(w => {
         <div class="payout-val">\${fmtMoney(w.potPayout)}</div>
       </div>
     </div>
+    <div class="result-bar">
+      <span class="result-label">Result</span>
+      <div class="result-options">
+        <div class="opt w">W</div>
+        <div class="opt l">L</div>
+        <div class="opt p">P</div>
+      </div>
+      <div class="result-line"></div>
+    </div>
     <div class="chip">GAME \${w.gameId}\${w.date ? ' &mdash; ' + w.date : ''}\${w.venue ? ' &mdash; ' + w.venue : ''}</div>
   \`;
   grid.appendChild(t);
@@ -468,208 +516,4 @@ wagers.forEach(w => {
     .setTitle('Open Wagers');
 
   SpreadsheetApp.getUi().showModalDialog(output, `Open Wagers (${openWagers.length})`);
-}
-// ---------------------------------------------------------------------------
-// Print Winners
-// ---------------------------------------------------------------------------
-function printWinners() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const ui = SpreadsheetApp.getUi();
-  const wt = ss.getSheetByName('Wager_Tracker');
-
-  if (!wt) { ui.alert('Error', 'Wager_Tracker tab not found.', ui.ButtonSet.OK); return; }
-
-  const allValues = wt.getDataRange().getValues();
-  if (allValues.length < 3) { ui.alert('No wagers found.', ui.ButtonSet.OK); return; }
-
-  const headers  = allValues[1];
-  const dataRows = allValues.slice(2);
-
-  const idx = {};
-  ['Game_ID','Date','Venue','Player/Team','Market','Pick','Line','Odds','Stake','Result','Grade','Payout'].forEach(h => {
-    idx[h] = headers.indexOf(h);
-  });
-
-  const winners = dataRows.filter(row => {
-    const grade  = idx['Grade']   >= 0 ? String(row[idx['Grade']]).trim().toUpperCase()  : '';
-    const gameId = idx['Game_ID'] >= 0 ? String(row[idx['Game_ID']]).trim() : '';
-    return gameId && grade === 'WIN';
-  });
-
-  if (winners.length === 0) {
-    ui.alert('No Winners Yet', 'No graded winning wagers found. Go place some bets!', ui.ButtonSet.OK);
-    return;
-  }
-
-  const wagersJson = JSON.stringify(winners.map(row => {
-    const odds   = parseFloat(idx['Odds']   >= 0 ? row[idx['Odds']]   : 0) || 0;
-    const stake  = parseFloat(idx['Stake']  >= 0 ? row[idx['Stake']]  : 0) || 0;
-    const payout = parseFloat(idx['Payout'] >= 0 ? row[idx['Payout']] : 0) || 0;
-    const result = idx['Result'] >= 0 ? String(row[idx['Result']]) : '';
-    return {
-      gameId : idx['Game_ID']     >= 0 ? String(row[idx['Game_ID']])     : '',
-      date   : idx['Date']        >= 0 ? String(row[idx['Date']])        : '',
-      venue  : idx['Venue']       >= 0 ? String(row[idx['Venue']])       : '',
-      player : idx['Player/Team'] >= 0 ? String(row[idx['Player/Team']]) : '',
-      market : idx['Market']      >= 0 ? String(row[idx['Market']])      : '',
-      pick   : idx['Pick']        >= 0 ? String(row[idx['Pick']])        : '',
-      line   : idx['Line']        >= 0 ? String(row[idx['Line']])        : '',
-      odds, stake, payout, result
-    };
-  }));
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
-<style>
-  @page { size: letter portrait; margin: 0.35in; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Inter',sans-serif; background:#fff; color:#111; padding:14px; }
-
-  .page-header {
-    display:flex; justify-content:space-between; align-items:center;
-    border-bottom:2.5px solid #1a6e35; padding-bottom:7px; margin-bottom:12px;
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-  .logo { font-size:16px; font-weight:900; color:#1a6e35; letter-spacing:3px; text-transform:uppercase; }
-  .meta { font-size:9px; color:#999; text-align:right; line-height:1.5; }
-  .meta strong { color:#333; }
-
-  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }
-
-  /* Ticket */
-  .ticket {
-    border:1.5px solid #1a6e35; border-radius:7px; overflow:hidden;
-    page-break-inside:avoid; break-inside:avoid; position:relative;
-  }
-
-  /* Green shimmer stripe */
-  .stripe {
-    height:4px;
-    background:linear-gradient(90deg,#0f4a23,#4ade80,#1a6e35,#4ade80,#0f4a23);
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-
-  /* WINNER! diagonal stamp */
-  .stamp {
-    position:absolute;
-    top:50%; left:50%;
-    transform:translate(-50%,-50%) rotate(-28deg);
-    font-size:26px; font-weight:900; letter-spacing:5px;
-    color:rgba(26,110,53,0.18);
-    border:3px solid rgba(26,110,53,0.18);
-    border-radius:4px; padding:3px 10px;
-    text-transform:uppercase; white-space:nowrap;
-    pointer-events:none; user-select:none;
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-
-  .t-head {
-    background:#f2faf5; border-left:4px solid #1a6e35;
-    padding:7px 9px 5px;
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-  .t-head .player { font-size:12px; font-weight:900; color:#111; text-transform:uppercase; line-height:1.2; }
-  .t-head .market { font-size:8.5px; color:#888; font-weight:600; margin-top:1px; text-transform:uppercase; letter-spacing:0.4px; }
-
-  .tear { border-top:1px dashed #b2dfc0; margin:0 9px; }
-
-  .t-body { padding:5px 9px 2px; }
-  .row { display:flex; justify-content:space-between; align-items:baseline; padding:2.5px 0; border-bottom:1px solid #f2f2f2; }
-  .row:last-child { border-bottom:none; }
-  .lbl { font-size:7.5px; color:#bbb; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
-  .val      { font-size:11px; font-weight:700; color:#222; }
-  .val.pick { font-size:12px; font-weight:900; color:#111; }
-  .val.odds { color:#1a6e35; font-size:12px; font-weight:900; }
-  .val.result { font-size:11px; color:#555; }
-
-  .t-foot {
-    background:#edf7f1; padding:5px 9px 6px;
-    display:flex; justify-content:space-between; align-items:center;
-    border-top:1px solid #b2dfc0; margin-top:3px;
-    -webkit-print-color-adjust:exact; print-color-adjust:exact;
-  }
-  .stake-lbl  { font-size:7.5px; color:#bbb; text-transform:uppercase; letter-spacing:1px; }
-  .stake-val  { font-size:11px; font-weight:700; color:#666; }
-  .payout-lbl { font-size:7.5px; color:#1a6e35; text-transform:uppercase; letter-spacing:1px; font-weight:700; text-align:right; }
-  .payout-val { font-size:16px; font-weight:900; color:#1a6e35; text-align:right; }
-
-  .chip { font-size:7px; color:#ccc; letter-spacing:0.5px; padding:3px 9px 5px; }
-
-  .print-bar { text-align:center; margin:16px 0 4px; }
-  .print-btn {
-    background:#1a6e35; color:#fff; border:none; padding:9px 28px;
-    font-size:11px; font-weight:800; border-radius:6px; cursor:pointer;
-    letter-spacing:2px; text-transform:uppercase;
-  }
-  .print-btn:hover { background:#145228; }
-
-  @media print {
-    .print-bar { display:none !important; }
-    body { padding:0; }
-  }
-</style>
-</head>
-<body>
-
-<div class="page-header">
-  <div class="logo">&#127942; VGK Edge &mdash; Winners</div>
-  <div class="meta">Printed <strong id="gen-date"></strong><br><span id="bet-count"></span></div>
-</div>
-
-<div class="grid" id="grid"></div>
-
-<div class="print-bar">
-  <button class="print-btn" onclick="window.print()">&#128438;&nbsp; Print</button>
-</div>
-
-<script>
-const wagers = ${wagersJson};
-const fmtOdds  = o => o > 0 ? '+' + o : String(o);
-const fmtMoney = v => '$' + parseFloat(v).toFixed(2);
-
-document.getElementById('gen-date').textContent =
-  new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
-document.getElementById('bet-count').textContent =
-  wagers.length + ' winning bet' + (wagers.length !== 1 ? 's' : '');
-
-const grid = document.getElementById('grid');
-wagers.forEach(w => {
-  const t = document.createElement('div');
-  t.className = 'ticket';
-  t.innerHTML = \`
-    <div class="stripe"></div>
-    <div class="stamp">WINNER!</div>
-    <div class="t-head">
-      <div class="player">\${w.player || '&mdash;'}</div>
-      <div class="market">\${w.market || '&mdash;'}</div>
-    </div>
-    <div class="tear"></div>
-    <div class="t-body">
-      <div class="row"><span class="lbl">Pick</span><span class="val pick">\${w.pick || '&mdash;'}</span></div>
-      <div class="row"><span class="lbl">Line</span><span class="val">\${w.line !== '' ? w.line : '&mdash;'}</span></div>
-      <div class="row"><span class="lbl">Odds</span><span class="val odds">\${fmtOdds(w.odds)}</span></div>
-      <div class="row"><span class="lbl">Result</span><span class="val result">\${w.result || '&mdash;'}</span></div>
-    </div>
-    <div class="t-foot">
-      <div><div class="stake-lbl">Staked</div><div class="stake-val">\${fmtMoney(w.stake)}</div></div>
-      <div><div class="payout-lbl">&#9650; Won</div><div class="payout-val">+\${fmtMoney(w.payout)}</div></div>
-    </div>
-    <div class="chip">GAME \${w.gameId}\${w.date ? ' &mdash; ' + w.date : ''}\${w.venue ? ' &mdash; ' + w.venue : ''}</div>
-  \`;
-  grid.appendChild(t);
-});
-<\/script>
-</body>
-</html>`;
-
-  const output = HtmlService.createHtmlOutput(html)
-    .setWidth(900)
-    .setHeight(640)
-    .setTitle('Winners');
-
-  SpreadsheetApp.getUi().showModalDialog(output, `Winners 🏆 (${winners.length})`);
 }

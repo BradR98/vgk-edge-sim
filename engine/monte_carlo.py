@@ -2,16 +2,26 @@ import numpy as np
 import pandas as pd
 from nhlpy import NHLClient
 
-def prob_to_american(p, rounding=5):
-    """Convert a win probability (0-1) to American moneyline odds, rounded to nearest 5."""
+def prob_to_american(p, hold=0.0783, rounding=5):
+    """
+    Convert a fair win probability (0-1) to American moneyline odds.
+
+    hold: sportsbook hold applied multiplicatively to each side.
+          Default 0.0783 = 34-cent line (-117/-117 on a fair 50/50 prop).
+          Each side's fair probability is scaled up by (1 + hold) before
+          conversion, so over and under are NOT exact mirrors — the book
+          takes juice from both sides.
+
+    rounding: round to nearest N American odds points (default 5).
+    """
     if p <= 0.0 or p >= 1.0:
         return ""
-    if p >= 0.5:
-        raw = -100.0 * p / (1.0 - p)
+    p_vigged = min(p * (1.0 + hold), 0.9999)  # clamp; p*hold can exceed 1 for near-certainty props
+    if p_vigged >= 0.5:
+        raw = -100.0 * p_vigged / (1.0 - p_vigged)
     else:
-        raw = 100.0 * (1.0 - p) / p
+        raw = 100.0 * (1.0 - p_vigged) / p_vigged
     val = int(round(raw / rounding) * rounding)
-    # Clamp to sportsbook-realistic range
     return max(-5000, min(5000, val))
 
 def get_upcoming_opponent(team_abbr="VGK", manual_opponent=None):

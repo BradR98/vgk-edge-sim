@@ -133,16 +133,11 @@ def append_team_ledger(sh, df_lines, metadata):
 
 def append_sim_ledger(sh, df_goalies, df_skaters, metadata):
     """Appends to the historical database tab, flagging Record_Type."""
-    ws_ledger = sh.worksheet("Sim_Ledger")
-    
-    # Deduplicate: Remove any existing rows for this game_id from bottom to top
-    game_id_str = str(metadata.get("game_id", ""))
-    if game_id_str:
-        col_a = ws_ledger.col_values(1)
-        matching_indices = [i + 1 for i, val in enumerate(col_a) if str(val) == game_id_str]
-        for idx in sorted(matching_indices, reverse=True):
-            ws_ledger.delete_rows(idx)
-            
+    try:
+        ws_ledger = sh.worksheet("Sim_Ledger")
+    except Exception:
+        ws_ledger = sh.add_worksheet(title="Sim_Ledger", rows="1000", cols="35")
+        
     # Process Skaters
     ledger_skaters = df_skaters.copy()
     ledger_skaters.insert(0, "Record_Type", "SKATER")
@@ -162,7 +157,22 @@ def append_sim_ledger(sh, df_goalies, df_skaters, metadata):
     combined_df.insert(2, "opponent", metadata.get("opponent", "N/A"))
     combined_df.insert(3, "venue", metadata.get("venue", "N/A"))
     combined_df.insert(4, "sim_timestamp_utc", metadata.get("timestamp", "N/A"))
+
+    # Ensure Row 1 has all 30 column headers
+    expected_headers = combined_df.columns.tolist()
+    row1 = ws_ledger.row_values(1)
+    if len(row1) < len(expected_headers) or row1[:len(expected_headers)] != expected_headers:
+        ws_ledger.update(range_name="A1", values=[expected_headers])
+        print(f"Updated Sim_Ledger headers ({len(expected_headers)} columns).")
     
+    # Deduplicate: Remove any existing rows for this game_id from bottom to top
+    game_id_str = str(metadata.get("game_id", ""))
+    if game_id_str:
+        col_a = ws_ledger.col_values(1)
+        matching_indices = [i + 1 for i, val in enumerate(col_a) if str(val) == game_id_str]
+        for idx in sorted(matching_indices, reverse=True):
+            ws_ledger.delete_rows(idx)
+            
     # Fill NaNs with empty string so gspread doesn't break
     combined_df = combined_df.fillna("")
     

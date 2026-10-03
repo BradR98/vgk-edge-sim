@@ -322,11 +322,25 @@ def run_post_mortem():
 
     print(f"Found {len(ungraded_game_ids)} game(s) with ungraded wagers: {ungraded_game_ids}")
 
-    # Preload sheets needed for audit
+    SIM_LEDGER_HEADERS = [
+        "game_id", "game_date", "opponent", "venue", "sim_timestamp_utc",
+        "Record_Type", "Name",
+        "Exp_Shots_Against", "Exp_xGA", "Exp_GAA", "Exp_Sv%", "Pull_Likelihood_%",
+        "Exp_SOG", "SOG_Line_1.5", "SOG_Line_2.5", "SOG_Line_3.5",
+        "SOG_O_1.5", "SOG_O_2.5", "SOG_O_3.5",
+        "Exp_xG", "Exp_Goals", "Goals_O_0.5", "Goals_U_0.5",
+        "Exp_Assist", "Asst_Line_O_0.5",
+        "Exp_Points", "Points_O_0.5", "Points_O_1.5", "Points_O_2.5", "Points_O_3.5"
+    ]
     try:
         ws_ledger = sh.worksheet("Sim_Ledger")
         sim_raw = ws_ledger.get_all_values()
         sim_headers = sim_raw[0] if sim_raw else []
+        if sim_raw and (len(sim_headers) < len(SIM_LEDGER_HEADERS) or any(not h.strip() for h in sim_headers[:len(SIM_LEDGER_HEADERS)])):
+            ws_ledger.update(range_name="A1", values=[SIM_LEDGER_HEADERS])
+            sim_headers = SIM_LEDGER_HEADERS
+            print("Self-repaired missing headers in Sim_Ledger tab.")
+
         clean_sim_headers = []
         for i, h in enumerate(sim_headers):
             if not h:

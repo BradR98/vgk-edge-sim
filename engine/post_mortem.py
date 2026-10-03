@@ -13,6 +13,20 @@ def calculate_payout(odds, stake):
     else:
         return stake / (abs(odds) / 100.0)
 
+def parse_num(val, default=0.0):
+    """Safely converts string/number values with $, commas, +, or spaces into a float."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip().replace('$', '').replace(',', '').replace('+', '')
+    if not s:
+        return default
+    try:
+        return float(s)
+    except ValueError:
+        return default
+
 def parse_boxscore_stats(boxscore):
     actuals = {}
     for team_key in ['awayTeam', 'homeTeam']:
@@ -61,15 +75,36 @@ def parse_boxscore_stats(boxscore):
 
 def get_actuals_for_player(actuals_dict, player_str, player_mapping):
     """Matches user input or simulation full names against the boxscore using the Player_Map tab."""
-    # 1. Exact match
-    if player_str in actuals_dict:
-        return actuals_dict[player_str]
+    p_clean = str(player_str).strip()
+    p_lower = p_clean.lower()
+    
+    if not p_clean:
+        return {}
+
+    # 1. Direct exact match
+    if p_clean in actuals_dict:
+        return actuals_dict[p_clean]
+
+    # 2. Case-insensitive exact match
+    for k, v in actuals_dict.items():
+        if k.lower() == p_lower:
+            return v
         
-    # 2. Map lookup
-    mapped_name = player_mapping.get(player_str.lower().strip())
-    if mapped_name and mapped_name in actuals_dict:
-        return actuals_dict[mapped_name]
-            
+    # 3. Map lookup via Terminology_Ranges
+    mapped_name = player_mapping.get(p_lower)
+    if mapped_name:
+        if mapped_name in actuals_dict:
+            return actuals_dict[mapped_name]
+        for k, v in actuals_dict.items():
+            if k.lower() == mapped_name.lower():
+                return v
+
+    # 4. Partial substring matching fallback
+    for k, v in actuals_dict.items():
+        k_lower = k.lower()
+        if p_lower in k_lower or k_lower in p_lower:
+            return v
+
     return {}
 
 def run_post_mortem():
@@ -265,8 +300,9 @@ def run_post_mortem():
 
     wager_headers = wagers_raw[1] if len(wagers_raw) >= 2 else []  # Row 2
     wager_records = []
-    for row in wagers_raw[2:]:  # Data starts at Row 3
-        record = {}
+    for idx, row in enumerate(wagers_raw[2:]):  # Data starts at Row 3 (idx 0 -> row_num 3)
+        row_num = idx + 3
+        record = {'_row_num': row_num}
         for i, val in enumerate(row):
             if i < len(wager_headers):
                 record[wager_headers[i]] = val
@@ -362,47 +398,78 @@ def run_post_mortem():
             continue
 
         # Grade all ungraded wagers for this game
-        for i, wager in enumerate(wager_records):
+        for wager in wager_records:
             if str(wager.get('Game_ID', '')).strip() != game_id_str:
                 continue
             if str(wager.get('Grade', '')).strip():
                 continue  # already graded
 
+            row_num = wager.get('_row_num')
             player = str(wager.get('Player/Team', ''))
             market_raw = str(wager.get('Market', '')).strip()
 
             # Resolve market through Terminology_Ranges market map
             internal_market = market_mapping.get(market_raw.lower(), market_raw.lower())
 
-            # Skip markets that aren't player-stat gradeable yet
-            gradeable_markets = {'sog', 'goals', 'assists', 'points', 'pim', 'shots against', 'goals against', 'save percentage'}
+            # Gradeable markets (player stats + team markets)
+            gradeable_markets = {
+                'sog', 'goals', 'assists', 'points', 'pim',
+                'shots against', 'goals against', 'save percentage',
+                'team_goals', 'team_total', 'moneyline'
+            }
             if internal_market not in gradeable_markets:
-                print(f"  Row {i+3}: Market '{market_raw}' → '{internal_market}' is not yet auto-gradeable. Skipping.")
+                print(f"  Row {row_num}: Market '{market_raw}' → '{internal_market}' is not yet auto-gradeable. Skipping.")
                 continue
 
             try:
-                line = float(wager.get('Line', 0) or 0)
-                stake = float(wager.get('Stake', 0) or 0)
-                odds = int(float(wager.get('Odds', -110) or -110))
+                line = parse_num(wager.get('Line'), 0.0)
+                stake = parse_num(wager.get('Stake'), 0.0)
+                odds = int(parse_num(wager.get('Odds'), -110))
             except Exception as e:
-                print(f"  Skipping row {i+3} — could not parse Line/Stake/Odds: {dict(wager)} | Error: {e}")
+                print(f"  Skipping row {row_num} — could not parse Line/Stake/Odds: {dict(wager)} | Error: {e}")
                 continue
 
-            player_actuals = get_actuals_for_player(actuals, player, player_mapping)
-            actual_stat = player_actuals.get(internal_market, 0)
-
-            if actual_stat > line:
-                grade = "WIN"
-                profit = calculate_payout(odds, stake)
-            elif actual_stat == line:
-                grade = "PUSH"
-                profit = 0
+            # Resolve actual stat
+            if internal_market in ['team_goals', 'team_total', 'moneyline']:
+                pt_lower = player.lower()
+                is_vgk = pt_lower in ['vgk', 'vegas golden knights', 'vegas']
+                if internal_market == 'team_goals' or (is_vgk and internal_market == 'goals'):
+                    actual_stat = team_actuals.get('vgk_goals', 0)
+                elif internal_market == 'team_total':
+                    actual_stat = team_actuals.get('vgk_goals', 0) + team_actuals.get('opp_goals', 0)
+                elif internal_market == 'moneyline' and is_vgk:
+                    actual_stat = 1 if team_actuals.get('vgk_goals', 0) > team_actuals.get('opp_goals', 0) else 0
+                else:
+                    actual_stat = 0
             else:
-                grade = "LOSS"
-                profit = -stake
+                player_actuals = get_actuals_for_player(actuals, player, player_mapping)
+                actual_stat = player_actuals.get(internal_market, 0)
 
-            # Row 1=Kelly, Row 2=Headers, data starts Row 3 → enumerate offset = i+3
-            row_num = i + 3
+            # Evaluate Pick (Over vs Under)
+            pick = str(wager.get('Pick', '')).strip().lower()
+            is_under = pick.startswith('u') or 'under' in pick or pick == '<'
+
+            if is_under:
+                if actual_stat < line:
+                    grade = "WIN"
+                    profit = calculate_payout(odds, stake)
+                elif actual_stat == line:
+                    grade = "PUSH"
+                    profit = 0.0
+                else:
+                    grade = "LOSS"
+                    profit = -stake
+            else:  # Over (default)
+                if actual_stat > line:
+                    grade = "WIN"
+                    profit = calculate_payout(odds, stake)
+                elif actual_stat == line:
+                    grade = "PUSH"
+                    profit = 0.0
+                else:
+                    grade = "LOSS"
+                    profit = -stake
+
             all_wager_updates.append({
                 'range': f'B{row_num}:C{row_num}',
                 'values': [[team_actuals.get('game_date', ''), team_actuals.get('venue', '')]]

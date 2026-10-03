@@ -148,12 +148,10 @@ function updateWagerSearch() {
   // Find or rename existing Wager Search tab
   let ws = ss.getSheetByName('Wager Search');
   if (!ws) {
-    // Try common old names
-    const oldNames = ['Wager_Search', 'WagerSearch', 'Wager Search'];
+    const oldNames = ['Wager_Search', 'WagerSearch'];
     for (const name of oldNames) {
       const found = ss.getSheetByName(name);
-      if (found && name !== 'Wager Search') { found.setName('Wager Search'); ws = found; break; }
-      if (found) { ws = found; break; }
+      if (found) { found.setName('Wager Search'); ws = found; break; }
     }
     if (!ws) ws = ss.insertSheet('Wager Search');
   }
@@ -161,8 +159,8 @@ function updateWagerSearch() {
   const allValues = wt.getDataRange().getValues();
   if (allValues.length < 3) { ui.alert('No data in Wager_Tracker.', ui.ButtonSet.OK); return; }
 
-  const headers   = allValues[1];            // row 2
-  const dataRows  = allValues.slice(2);      // row 3+
+  const headers   = allValues[1];
+  const dataRows  = allValues.slice(2);
   const resultIdx = headers.indexOf('Result');
   const gameIdIdx = headers.indexOf('Game_ID');
 
@@ -198,8 +196,8 @@ function printOpenWagers() {
   const allValues = wt.getDataRange().getValues();
   if (allValues.length < 3) { ui.alert('No wagers found.', ui.ButtonSet.OK); return; }
 
-  const headers   = allValues[1];
-  const dataRows  = allValues.slice(2);
+  const headers  = allValues[1];
+  const dataRows = allValues.slice(2);
 
   const idx = {};
   ['Game_ID','Date','Venue','Player/Team','Market','Pick','Line','Odds','Stake','Result','Grade'].forEach(h => {
@@ -217,7 +215,6 @@ function printOpenWagers() {
     return;
   }
 
-  // Build wager objects with calculated potential payout
   const wagersJson = JSON.stringify(openWagers.map(row => {
     const odds  = parseFloat(idx['Odds']  >= 0 ? row[idx['Odds']]  : 0) || 0;
     const stake = parseFloat(idx['Stake'] >= 0 ? row[idx['Stake']] : 0) || 0;
@@ -226,291 +223,237 @@ function printOpenWagers() {
       potPayout = odds > 0 ? stake * (odds / 100) : stake * (100 / Math.abs(odds));
     }
     return {
-      gameId  : idx['Game_ID']     >= 0 ? String(row[idx['Game_ID']])     : '',
-      date    : idx['Date']        >= 0 ? String(row[idx['Date']])        : '',
-      venue   : idx['Venue']       >= 0 ? String(row[idx['Venue']])       : '',
-      player  : idx['Player/Team'] >= 0 ? String(row[idx['Player/Team']]) : '',
-      market  : idx['Market']      >= 0 ? String(row[idx['Market']])      : '',
-      pick    : idx['Pick']        >= 0 ? String(row[idx['Pick']])        : '',
-      line    : idx['Line']        >= 0 ? String(row[idx['Line']])        : '',
-      odds    : odds,
-      stake   : stake,
+      gameId   : idx['Game_ID']     >= 0 ? String(row[idx['Game_ID']])     : '',
+      date     : idx['Date']        >= 0 ? String(row[idx['Date']])        : '',
+      venue    : idx['Venue']       >= 0 ? String(row[idx['Venue']])       : '',
+      player   : idx['Player/Team'] >= 0 ? String(row[idx['Player/Team']]) : '',
+      market   : idx['Market']      >= 0 ? String(row[idx['Market']])      : '',
+      pick     : idx['Pick']        >= 0 ? String(row[idx['Pick']])        : '',
+      line     : idx['Line']        >= 0 ? String(row[idx['Line']])        : '',
+      odds     : odds,
+      stake    : stake,
       potPayout: potPayout.toFixed(2)
     };
   }));
 
-  const htmlTemplate = `
-<!DOCTYPE html>
+  const htmlTemplate = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
+  @page { size: letter portrait; margin: 0.35in; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     font-family: 'Inter', sans-serif;
-    background: #0d0d0d;
-    color: #fff;
-    padding: 20px 16px 32px;
-    min-height: 100vh;
+    background: #fff;
+    color: #111;
+    padding: 14px;
   }
 
-  /* ── Header ── */
+  /* ── Page header ── */
   .page-header {
-    text-align: center;
-    margin-bottom: 28px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #B4975A44;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2.5px solid #B4975A;
+    padding-bottom: 7px;
+    margin-bottom: 12px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .page-header .logo {
-    font-size: 11px;
-    letter-spacing: 6px;
-    color: #B4975A;
-    font-weight: 700;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-  .page-header h1 {
-    font-size: 26px;
+  .logo {
+    font-size: 16px;
     font-weight: 900;
-    letter-spacing: 2px;
-    color: #fff;
+    color: #B4975A;
+    letter-spacing: 3px;
+    text-transform: uppercase;
   }
-  .page-header .subtitle {
-    font-size: 11px;
-    color: #555;
-    margin-top: 4px;
-    letter-spacing: 2px;
+  .meta {
+    font-size: 9px;
+    color: #999;
+    text-align: right;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
   }
+  .meta strong { color: #333; }
 
-  /* ── Ticket Grid ── */
+  /* ── 3-column grid: 2 rows × 3 cols = 6 per page ── */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-    max-width: 960px;
-    margin: 0 auto;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
   }
 
-  /* ── Individual Ticket ── */
+  /* ── Ticket shell ── */
   .ticket {
-    background: #161616;
-    border: 1px solid #B4975A55;
-    border-radius: 14px;
+    border: 1.5px solid #B4975A;
+    border-radius: 7px;
     overflow: hidden;
-    position: relative;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
-  .ticket-accent {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #B4975A, #f0c866, #B4975A);
+  /* Gold shimmer stripe */
+  .stripe {
+    height: 4px;
+    background: linear-gradient(90deg, #8a6820, #e8c97a, #B4975A, #e8c97a, #8a6820);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  .ticket-head {
-    background: linear-gradient(135deg, #B4975A 0%, #7a6030 100%);
-    padding: 14px 16px 10px;
+  /* Player + market header */
+  .t-head {
+    background: #faf7f0;
+    border-left: 4px solid #B4975A;
+    padding: 7px 9px 5px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .ticket-head .badge {
-    display: inline-block;
-    background: rgba(0,0,0,0.25);
-    color: #ffe;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 20px;
-    margin-bottom: 6px;
-  }
-  .ticket-head .player {
-    font-size: 18px;
+  .t-head .player {
+    font-size: 12px;
     font-weight: 900;
-    color: #000;
-    letter-spacing: 0.5px;
-    line-height: 1.1;
+    color: #111;
     text-transform: uppercase;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
   }
-  .ticket-head .market {
-    font-size: 11px;
-    color: #333;
+  .t-head .market {
+    font-size: 8.5px;
+    color: #888;
     font-weight: 600;
-    margin-top: 2px;
+    margin-top: 1px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
   }
 
-  /* ── Dashed Divider ── */
-  .tear {
-    height: 1px;
-    border-top: 1px dashed #B4975A55;
-    margin: 0 16px;
-    position: relative;
-  }
-  .tear::before, .tear::after {
-    content: '';
-    position: absolute;
-    top: -8px;
-    width: 14px; height: 14px;
-    background: #0d0d0d;
-    border: 1px solid #B4975A55;
-    border-radius: 50%;
-  }
-  .tear::before { left: -23px; }
-  .tear::after  { right: -23px; }
+  /* Dashed tear */
+  .tear { border-top: 1px dashed #d4c9a8; margin: 0 9px; }
 
-  /* ── Body Rows ── */
-  .ticket-body { padding: 12px 16px 4px; }
+  /* Data rows */
+  .t-body { padding: 5px 9px 2px; }
   .row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 5px 0;
-    border-bottom: 1px solid #222;
+    align-items: baseline;
+    padding: 2.5px 0;
+    border-bottom: 1px solid #f2f2f2;
   }
   .row:last-child { border-bottom: none; }
-  .row .lbl {
-    font-size: 10px;
-    color: #666;
+  .lbl {
+    font-size: 7.5px;
+    color: #bbb;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    font-weight: 600;
+    letter-spacing: 1px;
+    font-weight: 700;
   }
-  .row .val {
-    font-size: 14px;
-    font-weight: 600;
-    color: #ddd;
-  }
-  .row .val.pick   { color: #fff; font-weight: 700; font-size: 15px; }
-  .row .val.odds   { color: #B4975A; font-weight: 800; font-size: 16px; }
+  .val        { font-size: 11px; font-weight: 700; color: #222; }
+  .val.pick   { font-size: 12px; color: #111; font-weight: 900; }
+  .val.odds   { color: #8a6820; font-size: 12px; font-weight: 900; }
 
-  /* ── Footer ── */
-  .ticket-foot {
-    background: #111;
-    margin: 12px 0 0;
-    padding: 12px 16px;
+  /* Stake / To Win footer */
+  .t-foot {
+    background: #f7f4ec;
+    padding: 5px 9px 6px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-top: 1px solid #222;
+    border-top: 1px solid #e5dbc4;
+    margin-top: 3px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .ticket-foot .stake-lbl { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-  .ticket-foot .stake-val { font-size: 13px; font-weight: 700; color: #aaa; }
-  .ticket-foot .payout-block { text-align: right; }
-  .ticket-foot .payout-lbl  { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-  .ticket-foot .payout-val  { font-size: 20px; font-weight: 900; color: #4ade80; }
+  .stake-lbl  { font-size: 7.5px; color: #bbb; text-transform: uppercase; letter-spacing: 1px; }
+  .stake-val  { font-size: 11px; font-weight: 700; color: #666; }
+  .payout-lbl { font-size: 7.5px; color: #bbb; text-transform: uppercase; letter-spacing: 1px; text-align: right; }
+  .payout-val { font-size: 15px; font-weight: 900; color: #1a6e35; text-align: right; }
 
-  .game-chip {
-    font-size: 9px;
-    color: #555;
-    letter-spacing: 1px;
-    padding: 6px 16px 10px;
+  /* Game ID footer chip */
+  .chip {
+    font-size: 7px;
+    color: #ccc;
+    letter-spacing: 0.5px;
+    padding: 3px 9px 5px;
   }
 
-  /* ── Print Button ── */
-  .print-bar {
-    text-align: center;
-    margin: 32px 0 8px;
-  }
+  /* Print button */
+  .print-bar { text-align: center; margin: 16px 0 4px; }
   .print-btn {
-    background: linear-gradient(135deg, #B4975A, #d4b06a);
-    color: #000;
+    background: #B4975A;
+    color: #fff;
     border: none;
-    padding: 13px 40px;
-    font-size: 13px;
-    font-weight: 800;
-    border-radius: 8px;
-    cursor: pointer;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    box-shadow: 0 4px 20px #B4975A44;
-    transition: transform 0.1s, box-shadow 0.1s;
-  }
-  .print-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 24px #B4975A66;
-  }
-  .print-btn:active { transform: translateY(0); }
-  .count-note {
+    padding: 9px 28px;
     font-size: 11px;
-    color: #444;
-    margin-top: 10px;
-    letter-spacing: 1px;
+    font-weight: 800;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    text-transform: uppercase;
   }
+  .print-btn:hover { background: #9a7d40; }
 
-  /* ── Print Styles ── */
   @media print {
-    body { background: #fff; color: #000; padding: 12px; }
-    .ticket { background: #fff; border: 1.5px solid #B4975A; page-break-inside: avoid; }
-    .ticket-accent { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .ticket-head   { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .ticket-foot   { background: #f5f5f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .row .val.odds  { color: #8a6820; }
-    .ticket-foot .payout-val { color: #1a7a3a; }
     .print-bar { display: none !important; }
-    .page-header { border-bottom-color: #B4975A; }
-    .tear::before, .tear::after { background: #fff; }
+    body { padding: 0; }
   }
 </style>
 </head>
 <body>
 
 <div class="page-header">
-  <div class="logo">&#9830; VGK EDGE</div>
-  <h1>OPEN WAGERS</h1>
-  <div class="subtitle">PENDING RESULTS &mdash; <span id="gen-date"></span></div>
+  <div class="logo">&#9830; VGK Edge &mdash; Open Wagers</div>
+  <div class="meta">
+    Printed <strong id="gen-date"></strong><br>
+    <span id="bet-count"></span>
+  </div>
 </div>
 
-<div class="grid" id="ticket-grid"></div>
+<div class="grid" id="grid"></div>
 
 <div class="print-bar">
-  <button class="print-btn" onclick="window.print()">&#128438; Print Tickets</button>
-  <div class="count-note" id="count-note"></div>
+  <button class="print-btn" onclick="window.print()">&#128438;&nbsp; Print</button>
 </div>
 
 <script>
 const wagers = ${wagersJson};
 
-function fmtOdds(o) {
-  return o > 0 ? '+' + o : String(o);
-}
-function fmtMoney(v) {
-  return '$' + parseFloat(v).toFixed(2);
-}
+const fmtOdds  = o => o > 0 ? '+' + o : String(o);
+const fmtMoney = v => '$' + parseFloat(v).toFixed(2);
 
-document.getElementById('gen-date').textContent = new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
-document.getElementById('count-note').textContent = wagers.length + ' open bet' + (wagers.length !== 1 ? 's' : '') + ' pending';
+document.getElementById('gen-date').textContent =
+  new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+document.getElementById('bet-count').textContent =
+  wagers.length + ' open bet' + (wagers.length !== 1 ? 's' : '');
 
-const grid = document.getElementById('ticket-grid');
-
+const grid = document.getElementById('grid');
 wagers.forEach(w => {
   const t = document.createElement('div');
   t.className = 'ticket';
   t.innerHTML = \`
-    <div class="ticket-accent"></div>
-    <div class="ticket-head">
-      <div class="badge">Open &bull; Pending</div>
-      <div class="player">\${w.player || '—'}</div>
-      <div class="market">\${w.market || '—'}</div>
+    <div class="stripe"></div>
+    <div class="t-head">
+      <div class="player">\${w.player || '&mdash;'}</div>
+      <div class="market">\${w.market || '&mdash;'}</div>
     </div>
     <div class="tear"></div>
-    <div class="ticket-body">
-      <div class="row"><span class="lbl">Pick</span><span class="val pick">\${w.pick || '—'}</span></div>
-      <div class="row"><span class="lbl">Line</span><span class="val">\${w.line !== '' ? w.line : '—'}</span></div>
+    <div class="t-body">
+      <div class="row"><span class="lbl">Pick</span><span class="val pick">\${w.pick || '&mdash;'}</span></div>
+      <div class="row"><span class="lbl">Line</span><span class="val">\${w.line !== '' ? w.line : '&mdash;'}</span></div>
       <div class="row"><span class="lbl">Odds</span><span class="val odds">\${fmtOdds(w.odds)}</span></div>
     </div>
-    <div class="ticket-foot">
+    <div class="t-foot">
       <div>
         <div class="stake-lbl">Stake</div>
         <div class="stake-val">\${fmtMoney(w.stake)}</div>
       </div>
-      <div class="payout-block">
+      <div>
         <div class="payout-lbl">To Win</div>
         <div class="payout-val">\${fmtMoney(w.potPayout)}</div>
       </div>
     </div>
-    <div class="game-chip">GAME \${w.gameId}\${w.date ? ' &mdash; ' + w.date : ''}\${w.venue ? ' &mdash; ' + w.venue : ''}</div>
+    <div class="chip">GAME \${w.gameId}\${w.date ? ' &mdash; ' + w.date : ''}\${w.venue ? ' &mdash; ' + w.venue : ''}</div>
   \`;
   grid.appendChild(t);
 });
@@ -520,7 +463,7 @@ wagers.forEach(w => {
 
   const output = HtmlService.createHtmlOutput(htmlTemplate)
     .setWidth(900)
-    .setHeight(650)
+    .setHeight(640)
     .setTitle('Open Wagers');
 
   SpreadsheetApp.getUi().showModalDialog(output, `Open Wagers (${openWagers.length})`);
